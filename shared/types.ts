@@ -107,6 +107,8 @@ export interface SearchFilters {
   methods?: EvidenceMethod[];
   ageGroups?: AgeGroup[];
   humansOnly?: boolean;
+  /** Server-side only: restrict PubMed to brain/behavior research. */
+  neuroFocus?: boolean;
 }
 
 export interface SearchRequest {
@@ -134,8 +136,20 @@ export interface SearchResponse {
 
 // ─────────────────────────── AI research answers ───────────────────────────
 
+export interface CharacterProfile {
+  name: string;
+  /** Age in years (8–25). */
+  age: number;
+}
+
 export interface ExtractedIntent {
   topic: string;
+  /** Topic rewritten with scientific terms (e.g. "all-nighter" → "sleep deprivation"). */
+  scientificTopic: string;
+  /** True only when the user asked about hormones. */
+  includeHormones: boolean;
+  /** Age group whose studies are prioritized for the character (not a hard filter). */
+  preferredAgeGroup?: AgeGroup;
   task: "explain" | "find-studies" | "compare" | "limitations" | "region-function";
   /** Filters actually stated by the user. Unstated filters are left undefined. */
   filters: SearchFilters;
@@ -144,12 +158,32 @@ export interface ExtractedIntent {
   interpretationNotes: string[];
 }
 
+export type ClaimType = "reported-finding" | "interpretation" | "hypothesis" | "open-question" | "textbook-background";
+
 export interface CitedClaim {
   text: string;
-  /** Record IDs (e.g. "pmid:123") — validated against retrieved records. */
+  /** Record IDs ("pmid:123") or textbook background IDs ("region:hippocampus") — validated. */
   citations: string[];
   /** What kind of statement this is. */
-  claimType: "reported-finding" | "interpretation" | "hypothesis" | "open-question";
+  claimType: ClaimType;
+}
+
+export interface StudentParagraph extends CitedClaim {
+  heading: string;
+}
+
+export interface HormoneNote {
+  hormone: string;
+  role: string;
+  citations: string[];
+}
+
+/** How well a study's population matches the character (computed by the server, not the AI). */
+export interface PopulationMatch {
+  age: "same-age-group" | "different-age-group" | "not-indexed";
+  species: "human" | "animal" | "not-indexed";
+  includesMales: boolean | null;
+  note: string;
 }
 
 export interface StudyAssessment {
@@ -169,12 +203,23 @@ export interface ResearchAnswer {
   question: string;
   intent: ExtractedIntent;
   directAnswer: string;
+  /** Short, plain-language paragraphs for students ("What happens in his brain"). */
+  studentExplanation: StudentParagraph[];
+  /** Only present when the user asked about hormones. */
+  hormones: HormoneNote[];
+  keyTerms: { term: string; definition: string }[];
+  confidence: { level: "strong" | "moderate" | "limited" | "insufficient"; reason: string };
   mainFindings: CitedClaim[];
   mixedOrContradictory: CitedClaim[];
   limitations: string[];
   uncertainty: string;
   supportingStudies: StudyAssessment[];
   regions: { name: string; citations: string[] }[];
+  character?: CharacterProfile & { ageGroup: AgeGroup };
+  /** Per-record population match with the character. */
+  populationMatch: Record<string, PopulationMatch>;
+  /** Textbook background entries the AI was allowed to cite (from the region dictionary). */
+  background: { id: string; name: string }[];
   /** All records retrieved for this question, so users can inspect them. */
   evidence: ResearchRecord[];
   coverage: SourceCoverage[];

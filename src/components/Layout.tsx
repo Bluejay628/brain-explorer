@@ -4,7 +4,7 @@ import { useStore } from "../store";
 
 const NAV = [
   { to: "/", label: "Home", icon: IconHome, end: true },
-  { to: "/explore", label: "Explore", icon: IconBrain },
+  { to: "/explore", label: "Brain Lab", icon: IconBrain },
   { to: "/library", label: "Library", icon: IconLibrary },
   { to: "/saved", label: "Saved", icon: IconBookmark },
   { to: "/settings", label: "Settings", icon: IconSettings },

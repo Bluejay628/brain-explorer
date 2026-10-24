@@ -1,22 +1,52 @@
 import { Link } from "react-router-dom";
-import { REGION_BY_ID } from "../../shared/regions";
+import { REGION_BY_ID, childrenOf, type RegionKind } from "../../shared/regions";
+import { useStore } from "../store";
 import { IconSearch } from "../icons";
 
-const KIND_LABEL = { lobe: "Lobe", "cortical-area": "Cortical area", "deep-structure": "Deep structure", hindbrain: "Hindbrain" };
+const KIND_LABEL: Record<RegionKind, string> = {
+  lobe: "Lobe",
+  "cortical-area": "Cortical area",
+  subdivision: "Atlas subdivision",
+  "deep-structure": "Deep structure",
+  hindbrain: "Hindbrain",
+  marker: "Gland · approximate marker",
+};
 
-export function RegionPanel({ regionId, onAsk }: { regionId: string | null; onAsk: (q: string) => void }) {
+interface Props {
+  regionId: string | null;
+  onAsk: (q: string) => void;
+  onSelect: (id: string) => void;
+}
+
+export function RegionPanel({ regionId, onAsk, onSelect }: Props) {
+  const { pinned, togglePinned, character } = useStore();
   const region = regionId ? REGION_BY_ID.get(regionId) : undefined;
   if (!region) {
     return (
       <div className="empty">
-        <p>Select a region on the brain, or from the list under it, to see an overview.</p>
+        <p>Click a region on the brain, or choose one from the list under it, to see what it does.</p>
       </div>
     );
   }
+  const parents: string[] = [];
+  for (let p = region.parent; p; p = REGION_BY_ID.get(p)?.parent) parents.unshift(p);
+  const subs = childrenOf(region.id);
+  const shortName = region.name.replace(/ \(.*\)/, "").toLowerCase();
+  const canPin = Boolean(region.meshKeys?.length || region.marker);
+
   return (
     <div className="stack fade-in">
       <div>
-        <div className="eyebrow">{KIND_LABEL[region.kind]}</div>
+        {parents.length > 0 && (
+          <div className="breadcrumb">
+            {parents.map((p) => (
+              <span key={p}>
+                <button className="link-btn xs" style={{ color: "var(--cyan)", fontSize: 12 }} onClick={() => onSelect(p)}>{REGION_BY_ID.get(p)?.name}</button> ›{" "}
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="eyebrow" style={{ marginTop: 6 }}>{KIND_LABEL[region.kind]}</div>
         <h2 style={{ fontSize: 22, marginTop: 4 }}>{region.name}</h2>
       </div>
       <section>
@@ -27,24 +57,39 @@ export function RegionPanel({ regionId, onAsk }: { regionId: string | null; onAs
         <div className="section-label">Commonly studied in relation to</div>
         <div className="row wrap" style={{ gap: 6 }}>
           {region.commonlyStudiedIn.map((t) => (
-            <button key={t} className="chip" onClick={() => onAsk(`What evidence connects the ${region.name.toLowerCase()} to ${t}?`)}>{t}</button>
+            <button key={t} className="chip" onClick={() => onAsk(`What evidence connects the ${shortName} to ${t} in ${character.name}'s brain (a ${character.age}-year-old boy)?`)}>{t}</button>
           ))}
         </div>
       </section>
+      {subs.length > 0 && (
+        <section>
+          <div className="section-label">Subdivisions</div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {subs.map((s) => (
+              <button key={s.id} className="chip cyan" onClick={() => onSelect(s.id)}>{s.name}</button>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="notice amber small">
         <span><strong>Interpret with care.</strong> {region.caution}</span>
       </div>
       <div className="row wrap">
-        <button className="btn primary" onClick={() => onAsk(`What does research show about the role of the ${region.name.toLowerCase()}?`)}>
+        <button className="btn primary" onClick={() => onAsk(`What does research show about the ${shortName} in ${character.name}'s brain (a ${character.age}-year-old boy)?`)}>
           Ask about this region
         </button>
-        <Link className="btn" to={`/library?q=${encodeURIComponent(region.searchQuery)}`}>
+        {canPin && (
+          <button className="btn" aria-pressed={pinned.includes(region.id)} onClick={() => togglePinned(region.id)}>
+            {pinned.includes(region.id) ? "Remove from brain" : "+ Add to brain"}
+          </button>
+        )}
+        <Link className="btn ghost" to={`/library?q=${encodeURIComponent(region.searchQuery)}`}>
           <IconSearch size={15} /> Find studies
         </Link>
       </div>
       <p className="xs faint">
-        Source: the overview is a general educational summary written for Brain Explorer from standard neuroanatomy, not from a specific study.
-        It is shown so you know where to start; use "Ask" or "Find studies" to see published evidence. On the schematic model, region outlines are approximate.
+        The overview is a general educational summary written for Brain Explorer from standard neuroanatomy, not from a specific study.
+        Region outlines come from the Desikan-Killiany atlas on an average brain (FreeSurfer fsaverage).
       </p>
     </div>
   );

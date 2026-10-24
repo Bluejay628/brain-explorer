@@ -68,7 +68,7 @@ export function Settings() {
               <dt>Local library</dt>
               <dd>{status.librarySize.toLocaleString()} PubMed records cached</dd>
               <dt>3D model</dt>
-              <dd>Schematic placeholder (procedurally generated; regions approximate)</dd>
+              <dd>Average adult brain (FreeSurfer fsaverage5) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
             </dl>
           )}
           {status && !status.aiConfigured && (

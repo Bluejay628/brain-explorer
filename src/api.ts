@@ -1,7 +1,7 @@
 // Browser → server calls. The browser only ever talks to our own server (/api);
 // the server talks to PubMed, NeuroVault and Claude. No keys live in this file.
 
-import type { BrainMapAvailability, ResearchAnswer, ResearchRecord, SearchRequest, SearchResponse, ServerStatus } from "../shared/types";
+import type { BrainMapAvailability, CharacterProfile, ResearchAnswer, ResearchRecord, SearchRequest, SearchResponse, ServerStatus } from "../shared/types";
 
 export class ApiError extends Error {}
 
@@ -27,6 +27,6 @@ export const api = {
   search: (req: SearchRequest) => call<SearchResponse>("/api/search", { method: "POST", body: JSON.stringify(req) }),
   study: (id: string) => call<ResearchRecord>(`/api/studies/${encodeURIComponent(id)}`),
   maps: (id: string) => call<BrainMapAvailability>(`/api/studies/${encodeURIComponent(id)}/maps`),
-  ask: (question: string, opts: { selectedRegionId?: string; allowPubMed?: boolean }) =>
+  ask: (question: string, opts: { selectedRegionId?: string; allowPubMed?: boolean; character?: CharacterProfile; includeHormones?: boolean; focus?: string }) =>
     call<ResearchAnswer>("/api/ask", { method: "POST", body: JSON.stringify({ question, ...opts }) }),
 };

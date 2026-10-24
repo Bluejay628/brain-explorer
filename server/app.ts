@@ -40,6 +40,14 @@ const AskSchema = z.object({
   question: z.string().trim().min(3, "Please enter a longer question.").max(500, "Please keep questions under 500 characters."),
   selectedRegionId: z.string().max(40).optional(),
   allowPubMed: z.boolean().optional(),
+  includeHormones: z.boolean().optional(),
+  focus: z.string().trim().max(120).optional(),
+  character: z
+    .object({
+      name: z.string().trim().min(1).max(24).regex(/^[\p{L}' -]+$/u, "Names can only contain letters."),
+      age: z.number().int().min(8).max(25),
+    })
+    .optional(),
 });
 
 /** Tiny in-memory rate limiter so one visitor can't run up the AI bill. */
@@ -72,7 +80,7 @@ export function createApp(deps: Partial<EngineDeps> = {}) {
       model: config.claudeModel,
       ncbiKeyConfigured: Boolean(config.ncbiApiKey),
       librarySize: library.size,
-      brainModel: { kind: "schematic-placeholder" },
+      brainModel: { kind: "anatomical-mesh", attribution: "FreeSurfer fsaverage5 + Desikan-Killiany atlas (via nilearn and ggseg)" },
     };
     res.json(status);
   });

@@ -15,9 +15,10 @@ interface Props {
   initial?: string;
   busy?: boolean;
   autoFocus?: boolean;
+  placeholder?: string;
 }
 
-export function AskBox({ onAsk, initial = "", busy = false, autoFocus = false }: Props) {
+export function AskBox({ onAsk, initial = "", busy = false, autoFocus = false, placeholder = "Ask a question about the brain" }: Props) {
   const [q, setQ] = useState(initial);
   useEffect(() => setQ(initial), [initial]);
   const submit = (e: FormEvent) => {
@@ -28,12 +29,12 @@ export function AskBox({ onAsk, initial = "", busy = false, autoFocus = false }:
   return (
     <form className="ask" onSubmit={submit} role="search">
       <IconSpark className="lead" size={18} />
-      <label htmlFor="ask-input" className="sr-only">Ask a question about the brain</label>
+      <label htmlFor="ask-input" className="sr-only">{placeholder}</label>
       <input
         id="ask-input"
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Ask a question about the brain"
+        placeholder={placeholder}
         maxLength={500}
         autoFocus={autoFocus}
         autoComplete="off"

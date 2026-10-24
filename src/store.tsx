@@ -5,13 +5,18 @@
 // Nothing here is sent to any server. Clearing browser data removes it.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { ResearchRecord } from "../shared/types";
+import type { CharacterProfile, ResearchRecord } from "../shared/types";
 
 export interface Settings {
   theme: "lab" | "contrast";
   includePubMedByDefault: boolean;
   humansOnlyByDefault: boolean;
   autoRotate: boolean;
+}
+
+export interface CharacterState extends CharacterProfile {
+  /** Include hormones in answers (off unless the user asks). */
+  includeHormones: boolean;
 }
 
 export interface HistoryItem {
@@ -22,6 +27,7 @@ export interface HistoryItem {
 }
 
 const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true };
+const DEFAULT_CHARACTER: CharacterState = { name: "Leo", age: 16, includeHormones: false };
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -56,6 +62,12 @@ interface Store {
   removeSaved: (id: string) => void;
   history: HistoryItem[];
   addHistory: (item: Omit<HistoryItem, "at">) => void;
+  character: CharacterState;
+  updateCharacter: (c: Partial<CharacterState>) => void;
+  /** Subdivisions the user has "added" to the brain (highlighted with their functions). */
+  pinned: string[];
+  togglePinned: (id: string) => void;
+  clearPinned: () => void;
   clearAll: () => void;
 }
 
@@ -65,10 +77,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => read("be.settings", DEFAULT_SETTINGS));
   const [saved, setSaved] = useState<ResearchRecord[]>(() => readArray("be.saved"));
   const [history, setHistory] = useState<HistoryItem[]>(() => readArray("be.history"));
+  const [character, setCharacter] = useState<CharacterState>(() => read("be.character", DEFAULT_CHARACTER));
+  const [pinned, setPinned] = useState<string[]>(() => readArray("be.pinned"));
 
   useEffect(() => write("be.settings", settings), [settings]);
   useEffect(() => write("be.saved", saved), [saved]);
   useEffect(() => write("be.history", history), [history]);
+  useEffect(() => write("be.character", character), [character]);
+  useEffect(() => write("be.pinned", pinned), [pinned]);
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
@@ -91,13 +107,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeSaved: (id) => setSaved((cur) => cur.filter((s) => s.id !== id)),
       history,
       addHistory,
+      character,
+      updateCharacter: (c) =>
+        setCharacter((cur) => {
+          const next = { ...cur, ...c };
+          next.age = Math.min(25, Math.max(8, Math.round(next.age)));
+          next.name = next.name.replace(/[^\p{L}' -]/gu, "").slice(0, 24);
+          return next;
+        }),
+      pinned,
+      togglePinned: (id) => setPinned((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id].slice(-10))),
+      clearPinned: () => setPinned([]),
       clearAll: () => {
         setSaved([]);
         setHistory([]);
         setSettings(DEFAULT_SETTINGS);
+        setCharacter(DEFAULT_CHARACTER);
+        setPinned([]);
       },
     }),
-    [settings, saved, history, toggleSaved, addHistory],
+    [settings, saved, history, toggleSaved, addHistory, character, pinned],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

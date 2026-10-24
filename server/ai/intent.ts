@@ -4,13 +4,22 @@
 // and they only ever apply filters the user actually stated. Every filter that
 // gets applied is explained in `interpretationNotes` so users can see it.
 
-import type { AgeGroup, EvidenceMethod, ExtractedIntent, PublicationCategory, SearchFilters } from "../../shared/types.js";
+import type { AgeGroup, CharacterProfile, EvidenceMethod, ExtractedIntent, PublicationCategory, SearchFilters } from "../../shared/types.js";
 import { findRegionMentions, REGION_BY_ID } from "../../shared/regions.js";
+import { ageGroupForAge, asksAboutHormones, toScientificTopic } from "./neuro.js";
 
 interface IntentContext {
   selectedRegionId?: string;
+  character?: CharacterProfile;
+  /** The user ticked "include hormones". */
+  includeHormones?: boolean;
+  /** Explicit research focus (from a ready-made situation) — used as the search topic. */
+  focus?: string;
   now?: Date;
 }
+
+// Words that describe the character rather than the topic ("a 16-year-old boy who …").
+const CHARACTER_WORDS = /\b(\d{1,2}[- ]year[- ]olds?|boys?|his|he|him|himself|brain|brains|happens?|happening|inside|when|who|while|gets|got|feels?|felt|includ\w*|involved|takes?|took|plays?|playing|uses?|using|drinks?|wins?|practices?|spends?|has|have|pay|paying|laughing|several|hours?|\d+-minute|minutes?|important|big|early)\b/gi;
 
 const AGE_RULES: [AgeGroup, RegExp, string][] = [
   ["child", /\b(child|children|childhood|kids?|pediatric|paediatric)\b/i, "children"],
@@ -116,11 +125,39 @@ export function extractIntent(question: string, ctx: IntentContext = {}): Extrac
   const regionTerms = regions
     .filter((id) => !findRegionMentions(q).includes(id)) // add names only for regions implied by selection
     .map((id) => REGION_BY_ID.get(id)!.searchQuery);
-  const topic = [q.replace(/[?.!,;:"()]/g, " ").replace(REQUEST_WORDS, " "), ...regionTerms]
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const nameRe = ctx.character?.name ? new RegExp(`\\b${ctx.character.name.replace(/[^a-z]/gi, "")}('s)?\\b`, "gi") : null;
+  const toTopic = (text: string) =>
+    [
+      text
+        .replace(CHARACTER_WORDS, " ")
+        .replace(nameRe ?? /$^/, " ")
+        .replace(/[?.!,;:"()]/g, " ")
+        .replace(REQUEST_WORDS, " ")
+        .replace(asksAboutHormones(q) ? /\b(hormones?|hormonal)\b/gi : /$^/, " "),
+      ...regionTerms,
+    ]
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const dedupe = (t: string) => [...new Set(t.split(" "))].join(" ");
+  const focus = ctx.focus?.trim();
+  const topic = focus || toTopic(q);
+  // Translate everyday words BEFORE removing filler words, so phrases like "pulled an all-nighter" match.
+  const scientificTopic = dedupe(focus ? toScientificTopic(focus) : toTopic(toScientificTopic(q)) || topic || q);
+  if (focus) notes.push(`This situation is searched with the research focus "${focus}".`);
+
+  // ── Character, hormones, scientific wording ──
+  const includeHormones = Boolean(ctx.includeHormones) || asksAboutHormones(q);
+  let preferredAgeGroup: AgeGroup | undefined;
+  if (ctx.character && !filters.ageGroups) {
+    preferredAgeGroup = ageGroupForAge(ctx.character.age);
+    notes.push(
+      `${ctx.character.name} is ${ctx.character.age}, so studies indexed with his age group were searched first. Studies of other ages are still included and labeled.`,
+    );
+  }
+  if (includeHormones) notes.push("You asked about hormones, so the answer includes a hormone section.");
+  if (scientificTopic.toLowerCase() !== (topic || q).toLowerCase()) notes.push(`Everyday words were translated into research terms: "${scientificTopic}".`);
 
   if (!notes.length) notes.push("No age group, date range or study type was specified, so none was applied.");
-  return { topic: topic || q, task, filters, regions, interpretationNotes: notes };
+  return { topic: topic || q, scientificTopic, includeHormones, preferredAgeGroup, task, filters, regions, interpretationNotes: notes };
 }

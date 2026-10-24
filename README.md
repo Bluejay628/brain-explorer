@@ -1,6 +1,6 @@
 # Brain Explorer
 
-An interactive neuroscience research tool. Explore a 3D brain, search real published research, and ask questions answered by an AI that **shows the evidence behind every explanation**.
+An interactive neuroscience research tool built around a character. Students explore the brain of **Leo**, a fictional student whose age they choose (8–25). They put him in everyday situations, follow a day in his life, or ask anything. Every answer is a short, clear explanation built from published research, by an AI that **shows the evidence behind every explanation**.
 
 Built as a student project for the Congressional App Challenge.
 
@@ -12,12 +12,33 @@ Built as a student project for the Congressional App Challenge.
 
 | Feature | What you can do |
 |---|---|
-| **Explore Brain** | Rotate, zoom and reset a 3D brain; click regions (or use the region buttons) to read an overview; ask questions. |
+| **Brain Lab (character)** | Set the character's name and age; pick from 12 situations or 9 moments in his day; ask free questions. Answers are written as short student paragraphs with citations; hormones are covered only when asked. |
+| **Realistic 3D brain** | A real MRI-derived average brain (FreeSurfer fsaverage) with 34 atlas regions per hemisphere and real deep-structure meshes. Rotate, zoom, reset, hide hemispheres, see-through mode, atlas lines and colors, hormone-gland markers. |
+| **Subdivisions** | Add or remove up to 10 subdivisions; each is colored on the brain and listed with its function. |
 | **AI research answers** | Ask a question → the app retrieves real studies → Claude writes a structured answer → **every citation is checked** against the retrieved studies before you see it. |
 | **Research Library** | Search by topic, title, keyword, author, DOI or PubMed ID; filter by year, study type, population and method. |
 | **Study details** | Full PubMed metadata, abstract, evidence profile, links to PubMed/publisher/free full text, and a NeuroVault brain-map check. |
 | **Saved Studies** | Save studies and come back to them (stored in your browser). |
 | **Settings** | Theme, search defaults, server status, and an explanation of data sources and privacy. |
+
+## The character, and why it's honest
+
+Science studies groups, not one person, so nobody can say exactly what happens inside one specific boy's brain. Brain Explorer handles this openly:
+
+- The character is labeled **fictional** everywhere, and the 3D brain is labeled as an **average brain model**, not his scan.
+- His age decides which research is **searched first**: PubMed's matching age group (child 6–12, adolescent 13–18, young adult 19–24). Studies of other ages are still included.
+- Every study gets a **population label**, computed by the server rather than the AI: *Same age group*, *Different age group*, *Animal study*, or *Age not indexed*. The AI is told to say when it relies on evidence from adults or animals.
+- Answers say "research suggests that in people his age…" rather than stating facts about him.
+- Hormones are discussed **only when asked**: either the "Also explain hormones" box is ticked or the question mentions a hormone. Otherwise hormone notes are removed and the answer says so.
+
+## How the AI stays neuroscience-focused
+
+It isn't possible to download "all of neuroscience", but the engine gets close in practical terms:
+
+1. **All of PubMed** (about 38 million records) is searched live whenever the local library is thin. Searches are restricted to brain, cognition, emotion and hormone research (`NEURO_FOCUS` in `server/research/pubmed.ts`).
+2. **Everyday words are translated into research terms** before searching ("all-nighter" → "sleep deprivation", "scary movie" → "fear"). Each ready-made situation also carries an explicit research focus.
+3. **Textbook background:** short overviews of every atlas region are given to the AI as clearly labeled background. The AI may cite them as *Textbook background*, but the validator never lets them count as research findings.
+4. **A bigger starter library:** `npm run seed` also downloads studies for every situation, both for teens and in general.
 
 ## Scientific-integrity principles
 
@@ -106,31 +127,38 @@ Open http://localhost:5173.
 
 The local library is a JSON file (`data/library.json`, git-ignored). It holds only records fetched from PubMed. To add a specific paper, put its PMID in `EXTRA_PMIDS` in `scripts/seed-library.ts`, or open `/study/<PMID>` in the app.
 
-## The 3D brain model
+## 3D brain model: sources and licenses
 
-The current model is a **schematic placeholder**, generated procedurally from ellipsoids, noise-based folds and approximate fissures. It is labeled as such in the UI. Region boundaries are rough and for orientation only. Deep structures (hippocampus, amygdala, thalamus, basal ganglia, insula, anterior cingulate) are drawn at approximate positions.
+The model (`public/models/brain.json`, about 1.2 MB compressed) is built by `scripts/build-brain-model.py` from:
 
-**Why published maps aren't drawn on it:** statistical brain maps live in a standard coordinate space (usually MNI). The placeholder has no such coordinates, so overlaying a map would be misleading. Maps are linked to NeuroVault's own viewer instead.
+| Part | Source | License / terms |
+|---|---|---|
+| Cortical surface (pial) and sulcal depth | FreeSurfer **fsaverage5**, an average of 40 adult MRI scans (Fischl et al., 1999), as redistributed in the [nilearn](https://nilearn.github.io) Python package | FreeSurfer terms ([license](https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense)). nilearn lists the license as "unknown"; it is widely redistributed with attribution. **Check before commercial use.** |
+| Cortical regions | **Desikan-Killiany atlas** (Desikan et al., 2006, *NeuroImage* 31:968–980) on fsaverage5, via [ggseg.formats](https://github.com/ggsegverse/ggseg.formats) | ggseg code: MIT. Atlas: FreeSurfer distribution. |
+| Deep structures | FreeSurfer **aseg** structures on fsaverage5 (Fischl et al., 2002), via ggseg.formats | As above |
+| Gland markers | Hypothalamus, pituitary and pineal markers at approximate standard-brain positions | Written for this app and labeled "approximate" |
 
-### Replacing the brain model
+The deep-structure meshes use a different coordinate origin than the surfaces. The build script aligns them by fitting the corpus callosum mesh onto the surface's corpus callosum label (average residual about 1.6 mm). After alignment, structure centers fall at standard positions; for example, the left hippocampus is at about (−25, −23, −14) mm.
 
-A good upgrade is a mesh in MNI space with an atlas parcellation, for example meshes derived from the ICBM152 template or a FreeSurfer `fsaverage` surface. **Check the license of any model and add attribution here.** To swap it in:
+**Important limits:** this is an *average adult* brain. It is not the character's brain, and it shows where regions are, never brain activity. Children's and teens' brains differ in fine detail, such as cortical thickness and the timing of maturation.
 
-1. Export a `.glb` file whose meshes are named by the region ids in `shared/regions.ts` (e.g. `hippocampus`).
-2. In `src/brain/scene.ts`, load it with Three.js's `GLTFLoader` instead of `buildHemisphere()`, and set `mesh.userData.regionId` on each mesh. Picking, selection, x-ray and highlighting already work with any mesh that has `userData.regionId`.
-3. Only once the mesh is in a known coordinate space should NeuroVault maps be rendered on it.
+To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, download and unzip the nilearn wheel, then run `python scripts/build-brain-model.py <ggseg.formats dir> <nilearn fsaverage5 dir>`.
 
 ## Testing
 
-**Automated** (`npm test`, 36 tests):
+**Automated** (`npm test`, 50 tests):
 - `tests/research.test.ts`: PubMed XML parsing, missing-data handling, sample-size extraction, deduplication, query building, retry/rate-limit handling, malformed responses, search coverage reporting, NeuroVault DOI matching.
+- `tests/character.test.ts`: character intent (topic cleanup, everyday→research terms), hormones only when asked, age-group mapping, population labels, textbook background never counted as a finding, age-matched PubMed search first, region hierarchy integrity.
 - `tests/integrity.test.ts`: intent extraction (no silent filters), citation validation (fabricated citations removed), unsupported region claims, insufficient-evidence behavior, retrieval-only mode, PubMed-failure honesty, API key not exposed, input validation.
 
 The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMIDs are in the unused 90,000,000+ range). They are never loaded by the app.
 
 **Manual checklist:**
 - [ ] Home loads; the brain rotates; suggested questions navigate to Explore.
-- [ ] Explore: rotate left/right, zoom in/out, reset, and auto-rotate buttons work; drag and scroll/pinch work; clicking the brain selects a region; region buttons work with the keyboard (Tab + Enter).
+- [ ] Brain Lab: change the name and age, pick a situation, open the Day tab, tick "Also explain hormones" and confirm a hormone section appears only then.
+- [ ] Subdivisions tab: add 3 subdivisions → each gets its own color on the brain; Remove works.
+- [ ] Layers: hide the right hemisphere → the left hemisphere's inner surface shows; "Deep structures" shows the hippocampus and others inside.
+- [ ] Brain Lab: rotate left/right, zoom in/out, reset, and auto-rotate buttons work; drag and scroll/pinch work; clicking the brain selects a region; region buttons work with the keyboard (Tab + Enter).
 - [ ] "Deep structures" shows the inner structures; selecting the hippocampus turns it on automatically.
 - [ ] Ask "How does sleep restriction affect working memory?" → answer with numbered citations; clicking a number scrolls to the study.
 - [ ] Ask something unanswerable (e.g. "Does quantum entanglement explain consciousness?") → "Insufficient evidence".
@@ -144,7 +172,7 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 
 ## Known limitations
 
-- **3D model is a schematic placeholder** (see above). It is not anatomically exact.
+- **The 3D brain is an average adult brain**, not age-specific. Atlas boundaries are approximate for any individual.
 - **Live PubMed and NeuroVault calls have not yet been tested end-to-end.** They were blocked by the network policy of the cloud environment the app was built in. The parsing and error handling are unit-tested against PubMed-format sample data. Run `npm run seed` locally to confirm the live connection works.
 - **The Claude integration has not yet been run with a real key.** The request is type-checked against the official SDK, and the validation and fallback logic is tested with a stub.
 - **Methods, sample size and region mentions are keyword-detected** from abstracts and can be wrong. The UI labels them as such.
@@ -155,7 +183,8 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 
 ## Planned improvements
 
-- Licensed anatomical mesh in MNI space, then rendering verified NeuroVault maps on it.
+- Render verified NeuroVault maps on the fsaverage surface (the model is now in a standard space, so this is feasible).
+- Age-specific brain templates for children and teens.
 - Manually reviewed "featured" studies (`verification: "manually-reviewed"`).
 - Per-study AI summaries clearly labeled as AI interpretation.
 - Europe PMC as a second source (open-access full text).
@@ -166,5 +195,5 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 - Code: © the Brain Explorer authors. Choose a license (e.g. MIT) before publishing the repository.
 - Study metadata and abstracts: from PubMed / NLM, with copyright held by the respective publishers. Every record links to its source.
 - Fonts: Inter and JetBrains Mono (SIL Open Font License) via Google Fonts.
-- 3D model: procedurally generated by this project. No third-party model assets are used yet.
+- 3D model: FreeSurfer fsaverage5 + Desikan-Killiany atlas + aseg, via nilearn (BSD-3) and ggseg.formats (MIT). See "3D brain model: sources and licenses".
 - Libraries: React, Three.js, Express, Zod, fast-xml-parser, Anthropic SDK (see `package.json`; all open-source).

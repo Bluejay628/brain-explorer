@@ -5,7 +5,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { config } from "../config.js";
 import { REGIONS } from "../../shared/regions.js";
-import type { ExtractedIntent, ResearchRecord } from "../../shared/types.js";
+import type { CharacterProfile, ExtractedIntent, PopulationMatch, ResearchRecord } from "../../shared/types.js";
+import type { BrainRegion } from "../../shared/regions.js";
 import { ModelAnswerSchema, type ModelAnswer } from "./schema.js";
 
 export class AiError extends Error {
@@ -15,22 +16,32 @@ export class AiError extends Error {
   }
 }
 
-const SYSTEM_PROMPT = `You are the research engine inside Brain Explorer, an educational neuroscience tool used by students and the public. You explain what published research does and does not show, using only the study records supplied in each request.
+const SYSTEM_PROMPT = `You are the research engine inside Brain Explorer, an educational neuroscience tool for students. Students explore the brain of a fictional character and ask what research says happens in a brain like his. You explain what published research does and does not show, using only the material supplied in each request.
 
-How to work:
-- Base every statement on the supplied records. Cite records by their exact id (for example "pmid:12345678") in the citations array. Do not cite, name or describe any study that is not in the supplied records, even if you know of it.
-- Abstracts are all you have. If a detail (sample size, effect size, population, method) is not in a record, do not supply it from memory; say it is not reported in the abstract.
-- Separate what authors reported ("reported-finding") from your synthesis across studies ("interpretation"), proposed explanations ("hypothesis"), and unanswered questions ("open-question").
-- Be precise about evidence strength: distinguish correlation from causation; behavioral results from structural MRI, functional MRI, connectivity, EEG and animal findings; and reviews or meta-analyses from new experiments. Brain activation in a region does not show that the region uniquely causes a behavior.
-- Keep disagreements visible. If studies conflict or results are mixed, list them under mixedOrContradictory rather than forcing a consensus.
-- Mention sample and population limits when the records report them, and note when findings come from a narrow group (e.g., young adult university students) or from animals.
-- Avoid unsupported precision: no invented numbers, coordinates, effect sizes or percentages.
-- This tool does not diagnose or assess individuals. Group-level findings do not describe any particular person's brain; say so if the user asks about themselves.
-- If the supplied records do not actually address the question, set status to "insufficient-evidence", explain what is missing in directAnswer and uncertainty, and leave mainFindings empty.
-- For regions, use only these ids, and only for regions that a cited study itself reports results about: ${REGIONS.map((r) => r.id).join(", ")}.
-- Write for a curious high-school reader: clear, plain language, no hype.`;
+Evidence rules:
+- Base every statement on the supplied <record> studies. Cite them by exact id (for example "pmid:12345678"). Do not cite, name or describe any study that is not supplied, even if you know of it.
+- <background> entries are short textbook overviews of brain regions. You may use them to explain anatomy in plain words, citing their id (for example "region:hippocampus") with claimType "textbook-background". They are never evidence for a research finding.
+- Abstracts are all you have. If a detail (sample size, effect size, population, method) is not in a record, do not supply it from memory.
+- Separate what authors reported ("reported-finding") from your synthesis across studies ("interpretation"), proposed explanations ("hypothesis") and unanswered questions ("open-question").
+- Be precise about evidence strength: correlation vs causation; behavioral vs structural MRI vs functional MRI vs connectivity vs EEG vs animal findings; reviews and meta-analyses vs new experiments. Brain activation does not show that a region uniquely causes a behavior.
+- Keep disagreements visible under mixedOrContradictory instead of forcing a consensus.
+- No invented numbers, coordinates, effect sizes or percentages.
+- If the records do not actually address the question, set status to "insufficient-evidence", say what is missing, and leave mainFindings and studentExplanation empty.
 
-function formatRecord(r: ResearchRecord): string {
+The character:
+- The character is fictional. His brain stands for what research suggests typically happens in people like him; it is not a real scan. Write "research suggests that in people his age…" rather than "his brain definitely does…". Never present group averages as certain facts about him.
+- Each record says how well its population matches him (age group, species). When the best evidence comes from a different age group or from animals, say so in the paragraph that relies on it.
+- This tool does not diagnose. If a situation involves possible harm (for example a head injury), add one sentence that a real person should talk to a doctor.
+
+Hormones:
+- Discuss hormones only when the request says hormones were asked about; otherwise return an empty hormones array and do not bring them up.
+
+Writing:
+- studentExplanation is the heart of the answer: 2–5 short paragraphs in a logical order (what changes first, what follows), 2–3 sentences each, plain words a 14-year-old can follow, specific about brain regions and processes, and every paragraph cited.
+- Define scientific terms in keyTerms. No hype, no filler.
+- For regions, use only these ids, and only for regions a cited study itself reports results about: ${REGIONS.map((r) => r.id).join(", ")}.`;
+
+function formatRecord(r: ResearchRecord, match?: PopulationMatch): string {
   const authors = r.authors
     .slice(0, 3)
     .map((a) => a.collective ?? `${a.lastName ?? ""} ${a.foreName?.[0] ?? ""}`.trim())
@@ -44,6 +55,7 @@ function formatRecord(r: ResearchRecord): string {
     `Publication type (PubMed): ${r.publicationTypes.join(", ") || "not reported"}`,
     `Species (MeSH): ${r.species.value.join(", ") || "not indexed"}`,
     `Age groups (MeSH): ${r.ageGroups.value.join(", ") || "not indexed"}`,
+    ...(match ? [`Match with the character: ${match.note}`] : []),
     `Abstract:\n${abstract}`,
     `</record>`,
   ].join("\n");
@@ -55,20 +67,34 @@ export function isAiConfigured(): boolean {
   return Boolean(config.anthropicApiKey);
 }
 
+export interface SynthesisExtras {
+  character?: CharacterProfile;
+  background?: BrainRegion[];
+  populationMatch?: Record<string, PopulationMatch>;
+}
+
 export async function synthesizeAnswer(
   question: string,
   intent: ExtractedIntent,
   evidence: ResearchRecord[],
+  extras: SynthesisExtras = {},
 ): Promise<{ answer: ModelAnswer; model: string }> {
   if (!config.anthropicApiKey) throw new AiError("No API key", "The AI engine is not configured.");
   client ??= new Anthropic({ apiKey: config.anthropicApiKey, timeout: 120_000, maxRetries: 2 });
 
   // Only the question and public study records are sent — no personal data.
+  const { character, background = [], populationMatch = {} } = extras;
   const userContent = [
+    character
+      ? `<character>Name: ${character.name}. A fictional ${character.age}-year-old boy. Answer about what research suggests happens in a brain like his.</character>`
+      : "<character>None — answer the question in general terms.</character>",
     `<question>${question}</question>`,
-    `<interpretation>Task: ${intent.task}. ${intent.interpretationNotes.join(" ")}</interpretation>`,
+    `<request>Task: ${intent.task}. Hormones asked about: ${intent.includeHormones ? "yes" : "no"}. ${intent.interpretationNotes.join(" ")}</request>`,
+    `<background count="${background.length}">`,
+    ...background.map((r) => `<entry id="region:${r.id}">${r.name}: ${r.overview} Commonly studied in relation to: ${r.commonlyStudiedIn.join(", ")}.</entry>`),
+    `</background>`,
     `<evidence count="${evidence.length}">`,
-    ...evidence.map(formatRecord),
+    ...evidence.map((r) => formatRecord(r, populationMatch[r.id])),
     `</evidence>`,
   ].join("\n");
 

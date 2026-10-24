@@ -42,6 +42,10 @@ const METHOD_TERMS: Partial<Record<EvidenceMethod, string>> = {
   "animal-model": "(animals[mh] NOT humans[mh])",
 };
 
+/** Keeps PubMed results about the brain, behavior and hormones (not, e.g., muscle or heart studies). */
+export const NEURO_FOCUS =
+  "(brain[mh] OR brain[tiab] OR neur*[tiab] OR cognit*[tiab] OR cortex[tiab] OR cortical[tiab] OR memory[tiab] OR emotion*[tiab] OR hormon*[tiab] OR mental health[tiab])";
+
 /** Escape a user's free text for use inside a PubMed query. */
 function sanitizeTerm(q: string): string {
   return q.replace(/[\[\]{}<>\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
@@ -66,6 +70,7 @@ export function buildPubmedQuery(query: string, filters: SearchFilters = {}): st
   const methods = (filters.methods ?? []).map((m) => METHOD_TERMS[m]).filter(Boolean);
   if (methods.length) parts.push(`(${methods.join(" OR ")})`);
   if (filters.humansOnly) parts.push("humans[mh]");
+  if (filters.neuroFocus) parts.push(NEURO_FOCUS);
   return parts.join(" AND ");
 }
 

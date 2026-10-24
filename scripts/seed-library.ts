@@ -5,11 +5,13 @@
 // Every record comes straight from NCBI E-utilities. Nothing is written by hand
 // or by AI. To add a specific paper, add its PMID to EXTRA_PMIDS.
 
+import type { AgeGroup } from "../shared/types.js";
 import { config } from "../server/config.js";
 import { Library } from "../server/research/library.js";
 import { searchPubmed, efetch } from "../server/research/pubmed.js";
+import { DAY, SCENARIOS } from "../src/character/scenarios.js";
 
-const TOPICS: { query: string; humansOnly?: boolean }[] = [
+const TOPICS: { query: string; humansOnly?: boolean; ageGroups?: AgeGroup[] }[] = [
   { query: "sleep deprivation working memory", humansOnly: true },
   { query: "sleep memory consolidation hippocampus" },
   { query: "stress memory hippocampus cortisol" },
@@ -24,6 +26,11 @@ const TOPICS: { query: string; humansOnly?: boolean }[] = [
   { query: "language Broca area fMRI", humansOnly: true },
 ];
 
+// Every character situation, searched for teens (the default character age) and in general.
+for (const s of [...SCENARIOS, ...DAY]) {
+  TOPICS.push({ query: s.focus, ageGroups: ["adolescent"] }, { query: s.focus });
+}
+
 const EXTRA_PMIDS: string[] = [];
 const PER_TOPIC = 12;
 
@@ -34,9 +41,9 @@ async function main() {
 
   for (const t of TOPICS) {
     try {
-      const { records, total } = await searchPubmed(t.query, { humansOnly: t.humansOnly }, PER_TOPIC);
+      const { records, total } = await searchPubmed(t.query, { humansOnly: t.humansOnly, ageGroups: t.ageGroups, neuroFocus: true }, PER_TOPIC);
       const added = library.upsert(records);
-      console.log(`✓ "${t.query}": ${records.length} fetched (of ${total} in PubMed), ${added} new`);
+      console.log(`✓ "${t.query}"${t.ageGroups ? ` [${t.ageGroups.join(",")}]` : ""}: ${records.length} fetched (of ${total} in PubMed), ${added} new`);
     } catch (err) {
       console.error(`✗ "${t.query}": ${(err as Error).message}`);
     }

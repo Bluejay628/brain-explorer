@@ -16,6 +16,10 @@ function modelAnswer(over: Partial<ModelAnswer> = {}): ModelAnswer {
   return {
     status: "answered",
     directAnswer: "Sleep restriction is associated with lower working memory accuracy.",
+    studentExplanation: [{ heading: "Memory gets harder", text: "Studies found lower accuracy.", citations: [SLEEP_WM.id], claimType: "reported-finding" }],
+    hormones: [],
+    keyTerms: [{ term: "Working memory", definition: "Holding information in mind for a short time." }],
+    confidence: { level: "limited", reason: "Few small studies." },
     mainFindings: [{ text: "Accuracy decreased.", citations: [SLEEP_WM.id], claimType: "reported-finding" }],
     mixedOrContradictory: [],
     limitations: ["Small samples."],
@@ -84,7 +88,10 @@ describe("Citation validation", () => {
   });
 
   it("downgrades to insufficient evidence when no finding is supported", () => {
-    const v = validateAnswer(modelAnswer({ mainFindings: [{ text: "x", citations: ["pmid:99999999"], claimType: "interpretation" }] }), [SLEEP_WM]);
+    const v = validateAnswer(
+      modelAnswer({ mainFindings: [{ text: "x", citations: ["pmid:99999999"], claimType: "interpretation" }], studentExplanation: [] }),
+      [SLEEP_WM],
+    );
     expect(v.status).toBe("insufficient-evidence");
     expect(v.mainFindings).toEqual([]);
   });

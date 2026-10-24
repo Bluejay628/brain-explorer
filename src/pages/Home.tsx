@@ -1,13 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
 import { BrainViewer } from "../components/BrainViewer";
-import { AskBox, SUGGESTED_QUESTIONS } from "../components/AskBox";
+import { AskBox } from "../components/AskBox";
+import { CharacterCard } from "../character/CharacterCard";
+import { SCENARIOS } from "../character/scenarios";
 import { useStore } from "../store";
 import { REGION_BY_ID } from "../../shared/regions";
 import { IconArrowRight, IconBookmark, IconBrain, IconClock, IconLibrary, IconShield, IconSpark } from "../icons";
 
 export function Home() {
   const navigate = useNavigate();
-  const { settings, history, saved } = useStore();
+  const { settings, history, saved, character } = useStore();
+  const name = character.name.trim() || "Leo";
   const ask = (q: string) => navigate(`/explore?q=${encodeURIComponent(q)}`);
 
   return (
@@ -16,33 +19,36 @@ export function Home() {
         <div className="stack" style={{ gap: 18 }}>
           <div className="eyebrow">Neuroscience research explorer</div>
           <h1>
-            Explore the brain.<br />
-            <span className="accent">Inspect the evidence.</span>
+            Step inside {name}'s brain.<br />
+            <span className="accent">See the evidence.</span>
           </h1>
           <p className="lede">
-            Ask a question about the brain and get an explanation built only from published research — with every citation traceable,
-            its evidence type labeled, and its limitations stated.
+            {name} is a fictional student. Put him in everyday situations — an all-nighter, a big exam, a soccer game — and see what published
+            research suggests happens in a brain like his, in short, clear explanations with sources you can open.
           </p>
-          <AskBox onAsk={ask} />
+          <CharacterCard compact />
+          <AskBox onAsk={ask} placeholder={`Ask anything about ${name}'s brain…`} />
           <div className="stack-sm">
-            <div className="section-label" style={{ marginBottom: 0 }}>Suggested research questions</div>
-            {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
-              <button key={q} className="suggestion" onClick={() => ask(q)}>
-                <IconSpark size={14} /> {q}
-              </button>
-            ))}
+            <div className="section-label" style={{ marginBottom: 0 }}>Try a situation</div>
+            <div className="situation-grid">
+              {SCENARIOS.slice(0, 6).map((s) => (
+                <button key={s.id} className="situation" onClick={() => navigate(`/explore?s=${s.id}`)}>
+                  <span className="situation-title">{s.title}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="hero-brain viewer-frame">
-          <BrainViewer compact autoRotate={settings.autoRotate} onSelect={(id) => id && navigate(`/explore?region=${id}`)} />
+          <BrainViewer compact autoRotate={settings.autoRotate} onSelect={(id) => id && navigate(`/explore?region=${id}`)} caption={`${name}'s brain · average brain model (FreeSurfer fsaverage) · not a real scan`} />
         </div>
       </section>
 
       <section className="pillars">
         <div className="panel panel-pad pillar">
           <IconBrain />
-          <h3>Interactive 3D brain</h3>
-          <p>Rotate, zoom and select regions to see an overview and jump to the research on them.</p>
+          <h3>Realistic 3D brain</h3>
+          <p>A brain model built from real MRI data, with 34 atlas regions per side and deep structures you can add, hide and explore.</p>
         </div>
         <div className="panel panel-pad pillar">
           <IconLibrary />
