@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ResearchRecord } from "../../shared/types";
 import { useStore } from "../store";
 import { EvidenceChips, formatAuthors, sourceLinkLabel } from "./Evidence";
+import { CiteButton } from "./Cite";
 import { IconBookmark, IconBookmarkFilled, IconExternal } from "../icons";
 
 export function SaveButton({ record, small = false }: { record: ResearchRecord; small?: boolean }) {
@@ -40,6 +41,7 @@ export function StudyCard({ record, index, highlight }: { record: ResearchRecord
               <a className="btn sm ghost" href={record.sourceUrl} target="_blank" rel="noreferrer" title={`Open on ${sourceLinkLabel(record)}`}>
                 {sourceLinkLabel(record)} <IconExternal size={13} />
               </a>
+              <CiteButton record={record} />
               <SaveButton record={record} small />
             </div>
           </div>

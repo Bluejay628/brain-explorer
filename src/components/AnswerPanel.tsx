@@ -3,10 +3,11 @@ import type { ClaimType, CitedClaim, PopulationMatch, ResearchAnswer, SourceCove
 import { REGION_BY_ID } from "../../shared/regions";
 import { StudyCard } from "./StudyCard";
 import { BrainMapStatus } from "./BrainMaps";
+import { Bibliography, CiteButton } from "./Cite";
 import { IconAlert, IconCheck, IconInfo, IconShield, IconX } from "../icons";
 
 const CLAIM_LABEL: Record<ClaimType, { label: string; tone: string; help: string }> = {
-  "reported-finding": { label: "Reported by authors", tone: "cyan", help: "What the cited study's authors reported in their abstract." },
+  "reported-finding": { label: "Reported by the source", tone: "cyan", help: "What the cited study's authors (or the cited trusted web page) reported." },
   interpretation: { label: "AI interpretation", tone: "violet", help: "The AI's synthesis across studies — not a finding any one paper reported." },
   hypothesis: { label: "Hypothesis", tone: "amber", help: "A proposed explanation, not an established finding." },
   "open-question": { label: "Open question", tone: "", help: "Something the evidence does not yet answer." },
@@ -26,6 +27,7 @@ const SOURCE_LABEL: Record<SourceCoverage["source"], string> = {
   europepmc: "Europe PMC",
   openalex: "OpenAlex",
   semanticscholar: "Semantic Scholar",
+  web: "Trusted websites (web search)",
 };
 
 function PopulationBadge({ m }: { m?: PopulationMatch }) {
@@ -48,6 +50,7 @@ interface Props {
 export function AnswerPanel({ answer, onSelectRegion }: Props) {
   const [focus, setFocus] = useState<string | null>(null);
   const indexOf = useMemo(() => new Map(answer.evidence.map((r, i) => [r.id, i + 1])), [answer.evidence]);
+  const webIndex = useMemo(() => new Map(answer.webSources.map((w, i) => [w.id, i + 1])), [answer.webSources]);
   const notes = useMemo(() => new Map(answer.supportingStudies.map((s) => [s.recordId, s])), [answer.supportingStudies]);
   const recordById = useMemo(() => new Map(answer.evidence.map((r) => [r.id, r])), [answer.evidence]);
   const name = answer.character?.name;
@@ -60,7 +63,11 @@ export function AnswerPanel({ answer, onSelectRegion }: Props) {
   const Cites = ({ ids }: { ids: string[] }) => (
     <>
       {ids.map((id) =>
-        id.startsWith("region:") ? (
+        id.startsWith("web:") ? (
+          <button key={id} className="cite web" onClick={() => jump(id)} title="Web page — click to see it">
+            W{webIndex.get(id)}
+          </button>
+        ) : id.startsWith("region:") ? (
           <button key={id} className="cite bg" onClick={() => onSelectRegion?.(id.slice(7))} title="Textbook background — click to see this region">
             {REGION_BY_ID.get(id.slice(7))?.name.replace(/ \(.*\)/, "") ?? id}
           </button>
@@ -90,7 +97,11 @@ export function AnswerPanel({ answer, onSelectRegion }: Props) {
   );
 
   const banner = {
-    answered: { cls: "cyan", icon: <IconShield size={16} />, text: `Built from ${answer.evidence.length} retrieved ${answer.evidence.length === 1 ? "study" : "studies"}. Every citation was checked against them — click a number to inspect the source.` },
+    answered: {
+      cls: "cyan",
+      icon: <IconShield size={16} />,
+      text: `Built from ${answer.evidence.length} retrieved ${answer.evidence.length === 1 ? "study" : "studies"}${answer.webSources.length ? ` and ${answer.webSources.length} trusted web page${answer.webSources.length === 1 ? "" : "s"}` : ""}. Every citation was checked — click a number to inspect the source.`,
+    },
     "insufficient-evidence": { cls: "amber", icon: <IconAlert size={16} />, text: "Insufficient evidence. The retrieved research does not support a confident answer to this question." },
     "retrieval-only": { cls: "cyan", icon: <IconInfo size={16} />, text: "Retrieval-only mode: showing the studies found for your question, without an AI summary." },
     "ai-error": { cls: "red", icon: <IconX size={16} />, text: "The AI summary could not be generated. The retrieved studies are still shown." },
@@ -251,6 +262,35 @@ export function AnswerPanel({ answer, onSelectRegion }: Props) {
           </>
         )}
       </section>
+
+      {answer.webSources.length > 0 && (
+        <section>
+          <div className="section-label">Trusted web pages ({answer.webSources.length})</div>
+          <p className="xs faint" style={{ marginBottom: 8 }}>
+            Found by the AI's web search, limited to government, university, medical-center and journal sites. Only the quoted excerpts were used. Web pages are not studies — they summarize research.
+          </p>
+          <div className="stack-sm">
+            {answer.webSources.map((w, i) => (
+              <article key={w.id} id={`study-${w.id}`} className={`panel web-card${focus === w.id ? " highlight" : ""}`}>
+                <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div className="grow">
+                    <span className="study-index" style={{ color: "var(--amber)" }}>[W{i + 1}]</span>{" "}
+                    <a href={w.url} target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>{w.title}</a>
+                    <div className="xs faint">{w.domain} · {w.kind.replace("-", " ")}{w.pageAge ? ` · ${w.pageAge}` : ""}</div>
+                  </div>
+                  <CiteButton web={w} />
+                </div>
+                {w.excerpts.map((e, j) => <blockquote key={j}>“{e}”</blockquote>)}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <Bibliography
+        records={answer.evidence.filter((r) => [...answer.studentExplanation, ...answer.mainFindings, ...answer.mixedOrContradictory].some((c) => c.citations.includes(r.id)) || answer.status !== "answered")}
+        webSources={answer.webSources}
+      />
 
       {answer.evidence.length > 0 && (
         <section>

@@ -64,6 +64,22 @@ export function Settings() {
               ))}
             </div>
           </fieldset>
+          <label className="check" style={{ alignItems: "flex-start" }}>
+            <input type="checkbox" checked={settings.webSearch} onChange={(e) => updateSettings({ webSearch: e.target.checked })} />
+            <span>
+              <strong>Trusted web search</strong>
+              <span className="xs faint" style={{ display: "block" }}>
+                When fewer than 4 studies are found, the AI searches trusted sites only (NIH, CDC, WHO, NHS, universities, major journals). Every page is linked and checked. Needs the AI engine; costs a little extra per question.
+              </span>
+            </span>
+          </label>
+          <label className="field">
+            Citation style
+            <select className="select" value={settings.citationStyle} onChange={(e) => updateSettings({ citationStyle: e.target.value as "apa" | "mla" })}>
+              <option value="apa">APA 7th edition</option>
+              <option value="mla">MLA 9th edition</option>
+            </select>
+          </label>
           <label className="check">
             <input type="checkbox" checked={settings.humansOnlyByDefault} onChange={(e) => updateSettings({ humansOnlyByDefault: e.target.checked })} />
             Start library searches with "Human studies only"

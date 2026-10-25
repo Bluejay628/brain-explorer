@@ -46,6 +46,7 @@ const AskSchema = z.object({
   includeHormones: z.boolean().optional(),
   focus: z.string().trim().max(120).optional(),
   sources: SourcesSchema,
+  allowWeb: z.boolean().optional(),
   character: z
     .object({
       name: z.string().trim().min(1).max(24).regex(/^[\p{L}' -]+$/u, "Names can only contain letters."),

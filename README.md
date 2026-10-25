@@ -40,6 +40,18 @@ It isn't possible to download "all of neuroscience", but the engine gets close i
 3. **Textbook background:** short overviews of every atlas region are given to the AI as clearly labeled background. The AI may cite them as *Textbook background*, but the validator never lets them count as research findings.
 4. **A bigger starter library:** `npm run seed` also downloads studies for every situation, both for teens and in general.
 
+## Citations (APA 7 / MLA 9)
+
+Every study and web page has a **Cite** button. Each answer has a **Cite these sources** bibliography, and the Saved page has a bibliography of everything saved. Citations are built in `shared/citations.ts` only from metadata we actually have:
+- APA: up to 20 authors (19 … last for 21+), "n.d." when there's no date, title first when there are no authors, "[Preprint]" for preprints, and the DOI link when available.
+- MLA: one author, two authors, or "et al."; DOI or URL; "Accessed" date for web pages.
+- Volume, issue and page numbers aren't stored, so they're left out rather than guessed. The DOI or link lets readers find the full reference.
+- "Copy" puts both formatted text (with italics, for Google Docs or Word) and plain text on the clipboard.
+
+## Why the AI doesn't just "answer from the internet" (or from memory)
+
+Chatbots answering from memory can invent studies that don't exist. Brain Explorer never lets the AI answer without sources. When studies are thin, it searches **trusted websites**, and every web statement must cite a page the search tool actually returned. The citation checker removes anything else, and if nothing reliable is found, the app still says "insufficient evidence".
+
 ## Scientific-integrity principles
 
 These are enforced in code and covered by automated tests (`tests/integrity.test.ts`):
@@ -129,7 +141,8 @@ Brain Explorer searches **four official, free research databases** in parallel. 
 | **OpenAlex** ([docs](https://docs.openalex.org/)) | ~250M works from all publishers | Broad coverage of medicine, neuroscience and psychology journals | No key. Limited to fields 27/28/32 and works with abstracts. Set `CONTACT_EMAIL` for faster, more reliable access. Data is CC0. |
 | **Semantic Scholar** ([docs](https://api.semanticscholar.org/api-docs/graph)) | ~200M papers | Extra psychology and neuroscience coverage | Optional `SEMANTIC_SCHOLAR_API_KEY`; without it, a shared public rate limit applies, so it may be slow. |
 | **NeuroVault** ([neurovault.org](https://neurovault.org/)) | Published statistical brain maps | Checking whether authors shared maps | Exact DOI match only. Maps are linked, not drawn. |
-| **Claude API** ([docs](https://platform.claude.com/docs/en/api/messages/create)) | — | Writing the structured answer from retrieved studies | Server-side only. Only the question and public abstracts are sent. |
+| **Trusted web search** (Claude's `web_search` tool) | ~45 trusted domains | Filling gaps when fewer than 4 relevant studies are found | Limited by the API to government health agencies (NIH, CDC, WHO, NHS…), major medical centers, universities and journals (`TRUSTED_DOMAINS` in `server/ai/web.ts`). Only pages the search actually returned **with verbatim excerpts** are used, and only those excerpts reach the AI. Can be turned off in Settings. Web search costs about $10 per 1,000 searches, plus tokens. |
+| **Claude API** ([docs](https://platform.claude.com/docs/en/api/messages/create)) | — | Writing the structured answer from retrieved studies and web excerpts | Server-side only. Only the question, public abstracts and web excerpts are sent. |
 
 How the sources work together:
 - The **same paper found in several databases is merged** (by PMID, DOI or title). The record remembers every database it appeared in ("Found in: PubMed · OpenAlex").
@@ -159,8 +172,10 @@ To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, 
 
 ## Testing
 
-**Automated** (`npm test`, 65 tests):
+**Automated** (`npm test`, 78 tests):
 - `tests/research.test.ts`: PubMed XML parsing, missing-data handling, sample-size extraction, deduplication, query building, retry/rate-limit handling, malformed responses, search coverage reporting, NeuroVault DOI matching.
+- `tests/web.test.ts`: only trusted domains with verbatim excerpts become web sources (look-alike domains rejected); invented web citations removed; web search only runs when studies are thin and can be turned off; still "insufficient evidence" when the web finds nothing reliable.
+- `tests/citations.test.ts`: APA and MLA formatting for single, multiple, group and 21+ authors; missing data (n.d., no authors, no DOI); preprints; web pages; alphabetical bibliographies.
 - `tests/sources.test.ts`: Europe PMC, OpenAlex and Semantic Scholar parsing; preprint labeling; cross-database merging; one source failing doesn't block others; age searches only where supported; user's source choice respected.
 - `tests/character.test.ts`: character intent (topic cleanup, everyday→research terms), hormones only when asked, age-group mapping, population labels, textbook background never counted as a finding, age-matched PubMed search first, region hierarchy integrity.
 - `tests/integrity.test.ts`: intent extraction (no silent filters), citation validation (fabricated citations removed), unsupported region claims, insufficient-evidence behavior, retrieval-only mode, PubMed-failure honesty, API key not exposed, input validation.

@@ -200,6 +200,8 @@ describe("Multi-source search", () => {
       ["europepmc", true],
       ["openalex", false],
       ["semanticscholar", true],
+      ["web", false],
     ]);
+    expect(ans.coverage.find((c) => c.source === "web")?.error).toMatch(/AI engine/);
   });
 });

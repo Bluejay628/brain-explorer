@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { StudyCard } from "../components/StudyCard";
+import { Bibliography } from "../components/Cite";
 import { IconBookmark } from "../icons";
 
 export function Saved() {
@@ -34,8 +35,11 @@ export function Saved() {
           <Link className="btn primary" to="/library" style={{ marginTop: 14 }}>Browse the library</Link>
         </div>
       ) : (
-        <div className="stack-sm">
-          {saved.map((r) => <StudyCard key={r.id} record={r} />)}
+        <div className="stack">
+          <Bibliography records={saved} title="Bibliography of saved studies" />
+          <div className="stack-sm">
+            {saved.map((r) => <StudyCard key={r.id} record={r} />)}
+          </div>
         </div>
       )}
     </div>

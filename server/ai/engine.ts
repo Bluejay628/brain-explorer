@@ -3,7 +3,7 @@
 //   → dedupe + rank (age-matched studies first) → relevance check → Claude synthesis
 //   → citation validation → brain-map lookup
 
-import type { BrainMapAvailability, CharacterProfile, PopulationMatch, ResearchAnswer, ResearchRecord, SourceCoverage, SourceId } from "../../shared/types.js";
+import type { BrainMapAvailability, CharacterProfile, PopulationMatch, ResearchAnswer, ResearchRecord, SourceCoverage, SourceId, WebSource } from "../../shared/types.js";
 import { REGION_BY_ID, type BrainRegion } from "../../shared/regions.js";
 import { SOURCE_INFO } from "../../shared/types.js";
 import type { Library } from "../research/library.js";
@@ -14,6 +14,7 @@ import type { SourceSearchFn } from "../research/sources/types.js";
 import { dedupeRecords } from "../research/dedupe.js";
 import { extractIntent } from "./intent.js";
 import { AiError, isAiConfigured, synthesizeAnswer } from "./claude.js";
+import { searchTrustedWeb } from "./web.js";
 import { validateAnswer } from "./validate.js";
 import { ageGroupForAge, populationMatch } from "./neuro.js";
 import { lookupBrainMaps } from "../maps/neurovault.js";
@@ -24,6 +25,8 @@ export const MAX_EVIDENCE = 10;
 export const MIN_RELEVANCE = 0.6;
 const ENOUGH_LOCAL = 5;
 const ENOUGH_AGE_MATCHED = 3;
+/** Search trusted websites only when fewer than this many relevant studies were found. */
+export const WEB_SEARCH_BELOW = 4;
 
 export interface EngineDeps {
   library: Library;
@@ -32,6 +35,7 @@ export interface EngineDeps {
   synthesize?: typeof synthesizeAnswer;
   aiConfigured?: () => boolean;
   brainMaps?: (r: ResearchRecord) => Promise<BrainMapAvailability>;
+  webSearch?: typeof searchTrustedWeb;
 }
 
 export interface AskOptions {
@@ -43,6 +47,8 @@ export interface AskOptions {
   focus?: string;
   /** Which external databases to search (default: all). */
   sources?: SourceId[];
+  /** Search trusted websites when studies are thin (default: true). */
+  allowWeb?: boolean;
 }
 
 export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promise<ResearchAnswer> {
@@ -83,9 +89,17 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
   }
 
   // 3) Rank: relevance, with a boost for studies of the character's age group and for human studies.
+  //    A search word that appears in NONE of the retrieved studies (a typo, a nickname) carries no
+  //    information, so it is ignored — as long as at least half of the words remain.
+  const informative = topicTokens.filter((t) => results.some((r) => scoreRecord(r, [t]).coverage > 0));
+  const rankTokens = informative.length && informative.length >= Math.ceil(topicTokens.length / 2) ? informative : topicTokens;
+  if (rankTokens.length < topicTokens.length) {
+    const ignored = topicTokens.filter((t) => !rankTokens.includes(t));
+    intent.interpretationNotes.push(`Ignored word(s) that appear in no retrieved study: ${ignored.map((w) => `"${w}"`).join(", ")}.`);
+  }
   const ranked = results
     .map((r) => {
-      const s = scoreRecord(r, topicTokens);
+      const s = scoreRecord(r, rankTokens);
       const m = matchOf(r);
       const boost = (m?.age === "same-age-group" ? 1.35 : 1) * (m?.species === "animal" ? 0.8 : 1);
       return { r, coverage: s.coverage, score: s.score * boost };
@@ -120,17 +134,34 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
     populationMatch: populationMatches,
     background: [],
     evidence: ranked,
+    webSources: [],
     coverage,
     brainMaps: [],
     validationNotes: [],
     generatedAt: new Date().toISOString(),
   };
 
-  // 4) No relevant studies → say so honestly, without calling the AI.
-  if (!ranked.length) {
+  // 4) Thin evidence → search trusted websites (needs the AI engine, which runs the search).
+  const aiOn = (deps.aiConfigured ?? isAiConfigured)();
+  let webSources: WebSource[] = [];
+  if (aiOn && opts.allowWeb !== false && ranked.length < WEB_SEARCH_BELOW) {
+    try {
+      webSources = await (deps.webSearch ?? searchTrustedWeb)(opts.question, intent);
+      coverage.push({ source: "web", searched: true, query: `${intent.scientificTopic} (trusted sites only)`, resultCount: webSources.length });
+    } catch (err) {
+      coverage.push({ source: "web", searched: false, resultCount: 0, error: err instanceof AiError ? err.userMessage : (err as Error).message });
+    }
+  } else if (opts.allowWeb !== false) {
+    coverage.push({ source: "web", searched: false, resultCount: 0, ...(aiOn ? {} : { error: "needs the AI engine (add ANTHROPIC_API_KEY)" }) });
+  }
+  base.webSources = webSources;
+
+  // 5) No relevant studies or web pages → say so honestly, without calling the AI.
+  if (!ranked.length && !webSources.length) {
     const ext = coverage.filter((c) => c.source !== "local-library");
-    const searched = ext.filter((c) => c.searched).map((c) => SOURCE_INFO[c.source as SourceId].name);
-    const failed = ext.filter((c) => !c.searched && c.error).map((c) => `${SOURCE_INFO[c.source as SourceId].name} (${c.error})`);
+    const label = (c: SourceCoverage) => (c.source === "web" ? "trusted websites" : SOURCE_INFO[c.source as SourceId].name);
+    const searched = ext.filter((c) => c.searched).map(label);
+    const failed = ext.filter((c) => !c.searched && c.error).map((c) => `${label(c)} (${c.error})`);
     const pubmedNote = [
       searched.length ? `Also searched: ${searched.join(", ")}.` : "No online databases were searched.",
       failed.length ? `Could not be searched: ${failed.join("; ")}.` : "",
@@ -143,8 +174,8 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
     };
   }
 
-  // 5) AI not configured → show the evidence without a synthesis.
-  if (!(deps.aiConfigured ?? isAiConfigured)()) {
+  // 6) AI not configured → show the evidence without a synthesis.
+  if (!aiOn) {
     return {
       ...base,
       status: "retrieval-only",
@@ -164,6 +195,7 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
       character,
       background: backgroundRegions,
       populationMatch: populationMatches,
+      webSources,
     }));
   } catch (err) {
     const message = err instanceof AiError ? err.userMessage : "The AI summary failed.";
@@ -173,6 +205,7 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
   // 7) Validation.
   const validated = validateAnswer(modelAnswer, ranked, {
     backgroundIds: backgroundRegions.map((r) => `region:${r.id}`),
+    webSources,
     includeHormones: intent.includeHormones,
   });
 

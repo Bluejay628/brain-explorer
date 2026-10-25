@@ -454,3 +454,15 @@ ul.clean li + li { margin-top: 4px; }
 
 .lab-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; align-items: stretch; }
 @media (max-width: 1100px) { .lab-top { grid-template-columns: 1fr; } }
+
+/* ───────────────────────── Citations & web sources ───────────────────────── */
+.cite-wrap { position: relative; display: inline-flex; }
+.cite-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(440px, 86vw);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: rgba(7, 11, 20, 0.98);
+}
+.cite-text, .bibliography p { font-size: 13.5px; line-height: 1.6; color: var(--text); margin: 0; user-select: text; }
+.bibliography { display: flex; flex-direction: column; gap: 8px; }
+.web-card { padding: 12px 14px; border-left: 2px solid var(--amber); }
+.web-card blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 1px solid var(--line-strong); color: var(--text-dim); font-size: 13px; }
+.cite.web { color: var(--amber); border-color: rgba(245, 184, 75, 0.45); background: rgba(245, 184, 75, 0.07); }

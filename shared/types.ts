@@ -141,13 +141,29 @@ export interface SearchRequest {
 }
 
 export interface SourceCoverage {
-  source: "local-library" | SourceId;
+  source: "local-library" | SourceId | "web";
   searched: boolean;
   query?: string;
   resultCount: number;
   /** Total matching records reported by the source. */
   totalAvailable?: number;
   error?: string;
+}
+
+/** A web page found by the AI's web search tool on a trusted domain. */
+export interface WebSource {
+  /** "web:1", "web:2", … — the only IDs the AI may cite for web pages. */
+  id: string;
+  url: string;
+  title: string;
+  /** e.g. "nih.gov" */
+  domain: string;
+  kind: "government" | "health-organization" | "journal" | "university" | "other";
+  /** Page date as reported by the search engine, if any. */
+  pageAge?: string;
+  /** Verbatim excerpts from the page, as returned by the web search tool. */
+  excerpts: string[];
+  retrievedAt: string;
 }
 
 export interface SearchResponse {
@@ -243,6 +259,8 @@ export interface ResearchAnswer {
   background: { id: string; name: string }[];
   /** All records retrieved for this question, so users can inspect them. */
   evidence: ResearchRecord[];
+  /** Pages from trusted websites found by web search (only when studies were thin). */
+  webSources: WebSource[];
   coverage: SourceCoverage[];
   brainMaps: BrainMapAvailability[];
   /** Problems found by the citation validator (removed claims etc.). */

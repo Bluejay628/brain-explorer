@@ -11,7 +11,7 @@ const ClaimType = z
 
 const Citations = z
   .array(z.string())
-  .describe('IDs from the provided <record> ("pmid:…") or <background> ("region:…") entries. Never anything else.');
+  .describe('IDs from the provided <record> ("pmid:…", "doi:…"), <page> ("web:…") or <background> ("region:…") entries. Never anything else.');
 
 const Claim = z.object({
   text: z.string().describe("One statement, in plain language."),

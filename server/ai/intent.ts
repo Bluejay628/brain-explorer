@@ -125,7 +125,7 @@ export function extractIntent(question: string, ctx: IntentContext = {}): Extrac
   const regionTerms = regions
     .filter((id) => !findRegionMentions(q).includes(id)) // add names only for regions implied by selection
     .map((id) => REGION_BY_ID.get(id)!.searchQuery);
-  const nameRe = ctx.character?.name ? new RegExp(`\\b${ctx.character.name.replace(/[^a-z]/gi, "")}('s)?\\b`, "gi") : null;
+  const nameRe = ctx.character?.name ? new RegExp(`\\b${ctx.character.name.replace(/[^a-z]/gi, "")}(?:'s|\u2019s|s)?\\b`, "gi") : null;
   const toTopic = (text: string) =>
     [
       text

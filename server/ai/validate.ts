@@ -1,7 +1,8 @@
 // Citation validator — the last line of defence before an AI answer is shown.
 //
 // Every citation must point to a record that was actually retrieved for this
-// question, or to a textbook background entry that was actually supplied.
+// question, a trusted web page the web search actually returned, or a textbook
+// background entry that was actually supplied.
 // Rules:
 //  - Claims without any valid support are removed (and the removal is reported).
 //  - A "reported finding" must cite at least one STUDY; if it only cites
@@ -10,7 +11,7 @@
 //  - Brain regions must be real dictionary entries AND be mentioned (or have a
 //    subdivision mentioned) in the studies cited for them.
 
-import type { CitedClaim, HormoneNote, ResearchAnswer, ResearchRecord, StudentParagraph, StudyAssessment } from "../../shared/types.js";
+import type { CitedClaim, HormoneNote, ResearchAnswer, ResearchRecord, StudentParagraph, StudyAssessment, WebSource } from "../../shared/types.js";
 import { REGION_BY_ID, descendantsOf } from "../../shared/regions.js";
 import type { ModelAnswer } from "./schema.js";
 
@@ -34,6 +35,8 @@ export interface ValidationContext {
   /** Background IDs ("region:<id>") that were supplied to the model. */
   backgroundIds?: string[];
   includeHormones?: boolean;
+  /** Web pages actually returned by the trusted web search. */
+  webSources?: WebSource[];
 }
 
 /** Normalize the citation formats a model might plausibly produce. */
@@ -47,7 +50,10 @@ export function normalizeCitation(c: string): string {
 export function validateAnswer(answer: ModelAnswer, evidence: ResearchRecord[], ctx: ValidationContext = {}): ValidatedAnswer {
   const studies = new Map(evidence.map((r) => [r.id, r]));
   const background = new Set(ctx.backgroundIds ?? []);
-  const isValid = (c: string) => studies.has(c) || background.has(c);
+  const web = new Set((ctx.webSources ?? []).map((w) => w.id));
+  /** Studies and web pages are evidence; textbook background is not. */
+  const isEvidence = (c: string) => studies.has(c) || web.has(c);
+  const isValid = (c: string) => isEvidence(c) || background.has(c);
   const notes: string[] = [];
   const invalidSeen = new Set<string>();
 
@@ -66,12 +72,12 @@ export function validateAnswer(answer: ModelAnswer, evidence: ResearchRecord[], 
         return [];
       }
       let claimType = claim.claimType;
-      const citesStudy = valid.some((c) => studies.has(c));
+      const citesStudy = valid.some(isEvidence);
       if (!citesStudy && valid.length && (claimType === "reported-finding" || claimType === "interpretation")) {
         claimType = "textbook-background";
         notes.push(`Relabeled a statement in "${section}" as textbook background because it cited no study.`);
       }
-      if (claimType === "textbook-background" && citesStudy && valid.every((c) => studies.has(c))) claimType = "interpretation";
+      if (claimType === "textbook-background" && citesStudy && valid.every(isEvidence)) claimType = "interpretation";
       return [{ ...claim, citations: valid, claimType }];
     });
   }
@@ -135,7 +141,7 @@ export function validateAnswer(answer: ModelAnswer, evidence: ResearchRecord[], 
     const pmid = bad.replace(/^pmid:/, "");
     if (/^\d+$/.test(pmid)) directAnswer = directAnswer.replace(new RegExp(`\\(?PMID[:\\s]*${pmid}\\)?`, "gi"), "[unverified reference removed]");
   }
-  const hasStudySupport = [...mainFindings, ...studentExplanation].some((c) => c.citations.some((x) => studies.has(x)));
+  const hasStudySupport = [...mainFindings, ...studentExplanation].some((c) => c.citations.some(isEvidence));
   if (status === "answered" && !hasStudySupport) {
     status = "insufficient-evidence";
     notes.push("No statement in the AI answer was supported by a retrieved study, so it is shown as insufficient evidence.");

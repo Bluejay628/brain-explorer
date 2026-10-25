@@ -45,6 +45,7 @@ export function Explore() {
           includeHormones: character.includeHormones,
           focus,
           sources: settings.sources.length ? settings.sources : undefined,
+          allowWeb: settings.webSearch,
         });
         setAnswer(res);
         addHistory({ kind: "question", value: q, label: q });
@@ -54,7 +55,7 @@ export function Explore() {
         setBusy(false);
       }
     },
-    [region, settings.includePubMedByDefault, settings.sources, name, character.age, character.includeHormones, addHistory],
+    [region, settings.includePubMedByDefault, settings.sources, settings.webSearch, name, character.age, character.includeHormones, addHistory],
   );
 
   // Ask whenever the ?q= parameter changes (from Home, history links, or the ask box).

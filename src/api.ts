@@ -27,6 +27,6 @@ export const api = {
   search: (req: SearchRequest) => call<SearchResponse>("/api/search", { method: "POST", body: JSON.stringify(req) }),
   study: (id: string) => call<ResearchRecord>(`/api/studies/${encodeURIComponent(id)}`),
   maps: (id: string) => call<BrainMapAvailability>(`/api/studies/${encodeURIComponent(id)}/maps`),
-  ask: (question: string, opts: { selectedRegionId?: string; allowPubMed?: boolean; character?: CharacterProfile; includeHormones?: boolean; focus?: string; sources?: SourceId[] }) =>
+  ask: (question: string, opts: { selectedRegionId?: string; allowPubMed?: boolean; character?: CharacterProfile; includeHormones?: boolean; focus?: string; sources?: SourceId[]; allowWeb?: boolean }) =>
     call<ResearchAnswer>("/api/ask", { method: "POST", body: JSON.stringify({ question, ...opts }) }),
 };

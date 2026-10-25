@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { config } from "../config.js";
 import { REGIONS } from "../../shared/regions.js";
-import { SOURCE_INFO, type CharacterProfile, type ExtractedIntent, type PopulationMatch, type ResearchRecord } from "../../shared/types.js";
+import { SOURCE_INFO, type CharacterProfile, type ExtractedIntent, type PopulationMatch, type ResearchRecord, type WebSource } from "../../shared/types.js";
 import type { BrainRegion } from "../../shared/regions.js";
 import { ModelAnswerSchema, type ModelAnswer } from "./schema.js";
 
@@ -20,6 +20,7 @@ const SYSTEM_PROMPT = `You are the research engine inside Brain Explorer, an edu
 
 Evidence rules:
 - Base every statement on the supplied <record> studies. Cite them by exact id (for example "pmid:12345678"). Do not cite, name or describe any study that is not supplied, even if you know of it.
+- <page> entries are excerpts from trusted websites (government health agencies, universities, journals). Cite them by id (for example "web:2"). Use only what the excerpts say. They are secondary to <record> studies: when studies exist, lead with the studies; when a sentence relies only on a web page, word it as what that source says (for example "the NIH says…").
 - <background> entries are short textbook overviews of brain regions. You may use them to explain anatomy in plain words, citing their id (for example "region:hippocampus") with claimType "textbook-background". They are never evidence for a research finding.
 - Abstracts are all you have. If a detail (sample size, effect size, population, method) is not in a record, do not supply it from memory.
 - Separate what authors reported ("reported-finding") from your synthesis across studies ("interpretation"), proposed explanations ("hypothesis") and unanswered questions ("open-question").
@@ -53,7 +54,7 @@ function formatRecord(r: ResearchRecord, match?: PopulationMatch): string {
     `Title: ${r.title}`,
     `Authors: ${authors}${r.authors.length > 3 ? " et al." : ""}`,
     `Journal / year: ${r.journal ?? "not reported"} / ${r.publicationYear ?? "not reported"}`,
-    `Found in: ${(r.foundIn ?? [r.source]).map((id) => SOURCE_INFO[id].name).join(", ")}`,
+    `Found in: ${(r.foundIn ?? [r.source]).map((id) => SOURCE_INFO[id]?.name ?? id).join(", ")}`,
     `Publication type: ${r.publicationTypes.join(", ") || "not reported"}${r.peerReview?.value === "preprint" ? " — PREPRINT, not peer reviewed" : ""}`,
     `Species (MeSH): ${r.species.value.join(", ") || "not indexed"}`,
     `Age groups (MeSH): ${r.ageGroups.value.join(", ") || "not indexed"}`,
@@ -73,6 +74,7 @@ export interface SynthesisExtras {
   character?: CharacterProfile;
   background?: BrainRegion[];
   populationMatch?: Record<string, PopulationMatch>;
+  webSources?: WebSource[];
 }
 
 export async function synthesizeAnswer(
@@ -85,7 +87,7 @@ export async function synthesizeAnswer(
   client ??= new Anthropic({ apiKey: config.anthropicApiKey, timeout: 120_000, maxRetries: 2 });
 
   // Only the question and public study records are sent — no personal data.
-  const { character, background = [], populationMatch = {} } = extras;
+  const { character, background = [], populationMatch = {}, webSources = [] } = extras;
   const userContent = [
     character
       ? `<character>Name: ${character.name}. A fictional ${character.age}-year-old boy. Answer about what research suggests happens in a brain like his.</character>`
@@ -98,6 +100,12 @@ export async function synthesizeAnswer(
     `<evidence count="${evidence.length}">`,
     ...evidence.map((r) => formatRecord(r, populationMatch[r.id])),
     `</evidence>`,
+    `<web count="${webSources.length}">`,
+    ...webSources.map(
+      (w) =>
+        `<page id="${w.id}" site="${w.domain}" kind="${w.kind}"${w.pageAge ? ` date="${w.pageAge}"` : ""}>\nTitle: ${w.title}\nExcerpts (verbatim from the page):\n${w.excerpts.map((e) => `- ${e}`).join("\n")}\n</page>`,
+    ),
+    `</web>`,
   ].join("\n");
 
   try {

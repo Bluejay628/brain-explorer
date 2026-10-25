@@ -7,6 +7,7 @@ import { useStore } from "../store";
 import { SaveButton } from "../components/StudyCard";
 import { AGE_LABEL, CATEGORY_HELP, CategoryChip, METHOD_LABEL, PROVENANCE_LABEL, foundInLabel, sourceLinkLabel } from "../components/Evidence";
 import { BrainMapStatus } from "../components/BrainMaps";
+import { CiteButton } from "../components/Cite";
 import { IconArrowLeft, IconExternal, IconMap, IconX } from "../icons";
 
 const NR = <span className="faint">Not reported</span>;
@@ -102,6 +103,7 @@ export function StudyDetail() {
             {r.pmid && r.source !== "pubmed" && <a className="btn" href={`https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/`} target="_blank" rel="noreferrer">PubMed <IconExternal size={14} /></a>}
             {r.doiUrl && <a className="btn" href={r.doiUrl} target="_blank" rel="noreferrer">Publisher (DOI) <IconExternal size={14} /></a>}
             {r.pmcid && <a className="btn" href={`https://pmc.ncbi.nlm.nih.gov/articles/${r.pmcid}/`} target="_blank" rel="noreferrer">Free full text (PMC) <IconExternal size={14} /></a>}
+            <CiteButton record={r} small={false} />
             <SaveButton record={r} />
           </div>
 

@@ -14,6 +14,10 @@ export interface Settings {
   autoRotate: boolean;
   /** Which online research databases to search. */
   sources: SourceId[];
+  /** Let the AI search trusted websites when studies are thin. */
+  webSearch: boolean;
+  /** Citation style for "Cite" buttons. */
+  citationStyle: "apa" | "mla";
 }
 
 export interface CharacterState extends CharacterProfile {
@@ -28,7 +32,7 @@ export interface HistoryItem {
   at: string;
 }
 
-const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true, sources: ALL_SOURCES };
+const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true, sources: ALL_SOURCES, webSearch: true, citationStyle: "apa" };
 const DEFAULT_CHARACTER: CharacterState = { name: "Leo", age: 16, includeHormones: false };
 
 function read<T>(key: string, fallback: T): T {
