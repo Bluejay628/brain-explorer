@@ -17,8 +17,8 @@ const FiltersSchema = z
     yearFrom: z.number().int().min(1800).max(2100).optional(),
     yearTo: z.number().int().min(1800).max(2100).optional(),
     categories: z
-      .array(z.enum(["meta-analysis", "systematic-review", "review", "randomized-controlled-trial", "clinical-trial", "original-research", "case-report", "editorial-or-comment", "other"]))
-      .max(9)
+      .array(z.enum(["meta-analysis", "systematic-review", "review", "randomized-controlled-trial", "clinical-trial", "original-research", "case-report", "editorial-or-comment", "preprint", "other"]))
+      .max(10)
       .optional(),
     methods: z
       .array(z.enum(["functional-mri", "structural-mri", "diffusion-connectivity", "functional-connectivity", "eeg-meg", "pet", "lesion", "brain-stimulation", "behavioral", "animal-model", "computational"]))
@@ -29,10 +29,13 @@ const FiltersSchema = z
   })
   .strict();
 
+const SourcesSchema = z.array(z.enum(["pubmed", "europepmc", "openalex", "semanticscholar"])).max(4).optional();
+
 const SearchSchema = z.object({
   query: z.string().max(300),
   filters: FiltersSchema.optional(),
   includePubMed: z.boolean().optional(),
+  sources: SourcesSchema,
   limit: z.number().int().min(1).max(50).optional(),
 });
 
@@ -42,6 +45,7 @@ const AskSchema = z.object({
   allowPubMed: z.boolean().optional(),
   includeHormones: z.boolean().optional(),
   focus: z.string().trim().max(120).optional(),
+  sources: SourcesSchema,
   character: z
     .object({
       name: z.string().trim().min(1).max(24).regex(/^[\p{L}' -]+$/u, "Names can only contain letters."),
@@ -88,7 +92,7 @@ export function createApp(deps: Partial<EngineDeps> = {}) {
   app.post("/api/search", rateLimit(30), async (req, res) => {
     const parsed = SearchSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Invalid search request." });
-    const result = await combinedSearch(library, parsed.data, deps.pubmed);
+    const result = await combinedSearch(library, parsed.data, deps.sources ?? deps.pubmed);
     res.json(result);
   });
 

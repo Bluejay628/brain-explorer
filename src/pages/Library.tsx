@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { AgeGroup, EvidenceMethod, PublicationCategory, SearchFilters, SearchResponse } from "../../shared/types";
+import { SOURCE_INFO, type AgeGroup, type EvidenceMethod, type PublicationCategory, type SearchFilters, type SearchResponse, type SourceId } from "../../shared/types";
 import { api } from "../api";
 import { useStore } from "../store";
 import { StudyCard, StudyCardSkeleton } from "../components/StudyCard";
 import { AGE_LABEL, CATEGORY_LABEL, METHOD_LABEL } from "../components/Evidence";
 import { IconAlert, IconDoc, IconSearch, IconX } from "../icons";
 
-const CATEGORIES: PublicationCategory[] = ["original-research", "randomized-controlled-trial", "clinical-trial", "meta-analysis", "systematic-review", "review", "case-report"];
+const CATEGORIES: PublicationCategory[] = ["original-research", "randomized-controlled-trial", "clinical-trial", "meta-analysis", "systematic-review", "review", "case-report", "preprint"];
 const METHODS: EvidenceMethod[] = ["functional-mri", "structural-mri", "functional-connectivity", "diffusion-connectivity", "eeg-meg", "pet", "brain-stimulation", "behavioral", "animal-model"];
 const AGES: AgeGroup[] = ["child", "adolescent", "young-adult", "adult", "middle-aged", "older-adult"];
 
@@ -34,7 +34,7 @@ export function Library() {
       const clean: SearchFilters = Object.fromEntries(
         Object.entries(f).filter(([, v]) => v !== undefined && v !== "" && !(Array.isArray(v) && !v.length) && !Number.isNaN(v)),
       );
-      setData(await api.search({ query: q, filters: clean, includePubMed: pubmed && q.trim().length > 0, limit: 30 }));
+      setData(await api.search({ query: q, filters: clean, includePubMed: pubmed && q.trim().length > 0, sources: settings.sources, limit: 30 }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -55,7 +55,8 @@ export function Library() {
   const setYear = (k: "yearFrom" | "yearTo", v: string) => setFilters((f) => ({ ...f, [k]: v ? Number(v) : undefined }));
   const activeCount = (filters.categories?.length ?? 0) + (filters.methods?.length ?? 0) + (filters.ageGroups?.length ?? 0) + (filters.yearFrom ? 1 : 0) + (filters.yearTo ? 1 : 0) + (filters.humansOnly ? 1 : 0);
 
-  const pubmedCov = data?.coverage.find((c) => c.source === "pubmed");
+  const externalCov = data?.coverage.filter((c) => c.source !== "local-library") ?? [];
+  const failedCov = externalCov.filter((c) => !c.searched && c.error);
   const localCov = data?.coverage.find((c) => c.source === "local-library");
 
   return (
@@ -64,7 +65,7 @@ export function Library() {
         <div>
           <div className="eyebrow">Research library</div>
           <h1>Search published neuroscience</h1>
-          <p>Search by title, topic, keyword, author, DOI or PubMed ID. Results come from the local library and, optionally, live from PubMed.</p>
+          <p>Search by title, topic, keyword, author, DOI or PubMed ID. Results come from the local library and, optionally, live from PubMed, Europe PMC, OpenAlex and Semantic Scholar (choose them in Settings).</p>
         </div>
       </header>
 
@@ -73,7 +74,7 @@ export function Library() {
         <label htmlFor="lib-q" className="sr-only">Search studies</label>
         <input id="lib-q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g. working memory fMRI · Walker · 10.1038/… · 12345678" maxLength={300} />
         <label className="check xs" style={{ marginRight: 6 }}>
-          <input type="checkbox" checked={pubmed} onChange={(e) => setPubmed(e.target.checked)} /> Include PubMed
+          <input type="checkbox" checked={pubmed} onChange={(e) => setPubmed(e.target.checked)} /> Search online databases
         </label>
         <button className="btn primary" type="submit" disabled={busy}>{busy ? <span className="spinner" /> : "Search"}</button>
       </form>
@@ -103,7 +104,7 @@ export function Library() {
               </div>
             </fieldset>
             <fieldset>
-              <legend>Population (PubMed age indexing)</legend>
+              <legend>Population (age indexing)</legend>
               <div className="stack-sm">
                 <label className="check"><input type="checkbox" checked={filters.humansOnly ?? false} onChange={(e) => setFilters((f) => ({ ...f, humansOnly: e.target.checked || undefined }))} /> Human studies only</label>
                 {AGES.map((a) => (
@@ -133,17 +134,21 @@ export function Library() {
               <span>{data.results.length} result{data.results.length === 1 ? "" : "s"}</span>
               <span className="faint">·</span>
               <span>Local library: {localCov?.resultCount ?? 0} of {localCov?.totalAvailable ?? 0} records</span>
-              <span className="faint">·</span>
-              <span>
-                PubMed:{" "}
-                {pubmedCov?.searched ? `${pubmedCov.resultCount} retrieved (of ${pubmedCov.totalAvailable?.toLocaleString()} matches)` : pubmedCov?.error ? <span style={{ color: "var(--red)" }}>unavailable</span> : "not searched"}
-              </span>
+              {externalCov.map((c) => (
+                <span key={c.source}>
+                  <span className="faint">· </span>
+                  {SOURCE_INFO[c.source as SourceId].name}:{" "}
+                  {c.searched ? `${c.resultCount} (of ${c.totalAvailable?.toLocaleString() ?? "?"})` : c.error ? <span style={{ color: "var(--red)" }}>unavailable</span> : "not searched"}
+                </span>
+              ))}
             </div>
           )}
-          {pubmedCov?.error && !busy && (
+          {failedCov.length > 0 && !busy && (
             <div className="notice amber" style={{ marginBottom: 10 }}>
               <IconAlert size={16} />
-              <span>PubMed could not be reached ({pubmedCov.error}). Showing local library results only.</span>
+              <span>
+                Could not reach: {failedCov.map((c) => `${SOURCE_INFO[c.source as SourceId].name} (${c.error})`).join("; ")}. Results from the other sources are still shown.
+              </span>
             </div>
           )}
           {busy && <div className="stack-sm"><StudyCardSkeleton /><StudyCardSkeleton /><StudyCardSkeleton /></div>}
@@ -156,7 +161,7 @@ export function Library() {
           {!busy && !error && data && data.results.length === 0 && (
             <div className="panel empty">
               <IconDoc size={30} />
-              <p>{localCov?.totalAvailable === 0 && !pubmedCov?.searched ? "The local library is empty. Search with “Include PubMed” on, or run npm run seed on the server." : "No studies matched. Try broader terms or fewer filters."}</p>
+              <p>{localCov?.totalAvailable === 0 && !externalCov.some((c) => c.searched) ? "The local library is empty. Tick “Search online databases”, or run npm run seed on the server." : "No studies matched. Try broader terms or fewer filters."}</p>
             </div>
           )}
           {!busy && data && (

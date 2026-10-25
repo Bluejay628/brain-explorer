@@ -3,12 +3,14 @@
 //   → dedupe + rank (age-matched studies first) → relevance check → Claude synthesis
 //   → citation validation → brain-map lookup
 
-import type { BrainMapAvailability, CharacterProfile, PopulationMatch, ResearchAnswer, ResearchRecord, SourceCoverage } from "../../shared/types.js";
+import type { BrainMapAvailability, CharacterProfile, PopulationMatch, ResearchAnswer, ResearchRecord, SourceCoverage, SourceId } from "../../shared/types.js";
 import { REGION_BY_ID, type BrainRegion } from "../../shared/regions.js";
+import { SOURCE_INFO } from "../../shared/types.js";
 import type { Library } from "../research/library.js";
 import { scoreRecord, tokenize } from "../research/library.js";
-import { combinedSearch, type PubmedSearchFn } from "../research/search.js";
-import { searchPubmed } from "../research/pubmed.js";
+import { combinedSearch } from "../research/search.js";
+import { DEFAULT_SOURCES, searchSources, type SourceRegistry } from "../research/sources/index.js";
+import type { SourceSearchFn } from "../research/sources/types.js";
 import { dedupeRecords } from "../research/dedupe.js";
 import { extractIntent } from "./intent.js";
 import { AiError, isAiConfigured, synthesizeAnswer } from "./claude.js";
@@ -25,7 +27,8 @@ const ENOUGH_AGE_MATCHED = 3;
 
 export interface EngineDeps {
   library: Library;
-  pubmed?: PubmedSearchFn;
+  pubmed?: SourceSearchFn;
+  sources?: SourceRegistry;
   synthesize?: typeof synthesizeAnswer;
   aiConfigured?: () => boolean;
   brainMaps?: (r: ResearchRecord) => Promise<BrainMapAvailability>;
@@ -38,11 +41,14 @@ export interface AskOptions {
   character?: CharacterProfile;
   includeHormones?: boolean;
   focus?: string;
+  /** Which external databases to search (default: all). */
+  sources?: SourceId[];
 }
 
 export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promise<ResearchAnswer> {
   const { library } = deps;
-  const pubmed = deps.pubmed ?? searchPubmed;
+  // Tests can inject sources; `pubmed` alone is accepted for older tests.
+  const registry: SourceRegistry = deps.sources ?? (deps.pubmed ? { pubmed: deps.pubmed } : DEFAULT_SOURCES);
   const character = opts.character;
   const intent = extractIntent(opts.question, { selectedRegionId: opts.selectedRegionId, character, includeHormones: opts.includeHormones, focus: opts.focus });
   const query = intent.scientificTopic;
@@ -58,35 +64,22 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
   const relevantLocal = results.filter(isRelevant);
   const ageMatchedLocal = relevantLocal.filter((r) => matchOf(r)?.age === "same-age-group");
 
-  // 2) PubMed when the library lacks enough relevant (or age-matched) evidence.
-  const needPubmed = relevantLocal.length < ENOUGH_LOCAL || (group !== undefined && ageMatchedLocal.length < ENOUGH_AGE_MATCHED);
-  if (needPubmed && opts.allowPubMed !== false) {
+  // 2) External databases when the library lacks enough relevant (or age-matched) evidence.
+  //    All enabled sources are searched in parallel; age-matched searches only where the
+  //    source has age indexing (PubMed, Europe PMC).
+  const needExternal = relevantLocal.length < ENOUGH_LOCAL || (group !== undefined && ageMatchedLocal.length < ENOUGH_AGE_MATCHED);
+  if (needExternal && opts.allowPubMed !== false) {
     const filters = { ...intent.filters, neuroFocus: true };
-    const runs: { label: string; filters: typeof filters }[] = [{ label: "general", filters }];
-    if (group && !intent.filters.ageGroups) runs.unshift({ label: "age-matched", filters: { ...filters, ageGroups: [group] } });
-    let total = 0;
-    let found: ResearchRecord[] = [];
-    const queries: string[] = [];
-    const errors: string[] = [];
-    for (const run of runs) {
-      try {
-        const pm = await pubmed(query, run.filters, 12);
-        found = found.concat(pm.records);
-        total = Math.max(total, pm.total);
-        queries.push(pm.query);
-      } catch (err) {
-        errors.push((err as Error).message);
-      }
-    }
-    if (found.length) library.upsert(found);
-    coverage.push(
-      queries.length
-        ? { source: "pubmed", searched: true, query: queries.join("  |  "), resultCount: found.length, totalAvailable: total }
-        : { source: "pubmed", searched: false, resultCount: 0, error: errors[0] },
-    );
-    results = dedupeRecords([...results, ...found]);
+    const runs: { filters: typeof filters; onlyAgeCapable?: boolean }[] = [{ filters }];
+    if (group && !intent.filters.ageGroups) runs.unshift({ filters: { ...filters, ageGroups: [group] }, onlyAgeCapable: true });
+    const ext = await searchSources(registry, opts.sources, query, runs, 12);
+    if (ext.records.length) library.upsert(ext.records);
+    coverage.push(...ext.coverage);
+    results = dedupeRecords([...results, ...ext.records]);
   } else {
-    coverage.push({ source: "pubmed", searched: false, resultCount: 0 });
+    for (const id of Object.keys(registry) as SourceId[]) {
+      if (!opts.sources || opts.sources.includes(id)) coverage.push({ source: id, searched: false, resultCount: 0 });
+    }
   }
 
   // 3) Rank: relevance, with a boost for studies of the character's age group and for human studies.
@@ -135,8 +128,13 @@ export async function answerQuestion(opts: AskOptions, deps: EngineDeps): Promis
 
   // 4) No relevant studies → say so honestly, without calling the AI.
   if (!ranked.length) {
-    const pm = coverage.find((c) => c.source === "pubmed");
-    const pubmedNote = pm?.searched ? "PubMed was also searched." : pm?.error ? `PubMed could not be searched (${pm.error}).` : "PubMed was not searched.";
+    const ext = coverage.filter((c) => c.source !== "local-library");
+    const searched = ext.filter((c) => c.searched).map((c) => SOURCE_INFO[c.source as SourceId].name);
+    const failed = ext.filter((c) => !c.searched && c.error).map((c) => `${SOURCE_INFO[c.source as SourceId].name} (${c.error})`);
+    const pubmedNote = [
+      searched.length ? `Also searched: ${searched.join(", ")}.` : "No online databases were searched.",
+      failed.length ? `Could not be searched: ${failed.join("; ")}.` : "",
+    ].join(" ").trim();
     return {
       ...base,
       directAnswer: `Brain Explorer could not find studies that clearly address this question. The local library was searched. ${pubmedNote} This does not mean the effect doesn't exist — only that no matching evidence was retrieved.`,

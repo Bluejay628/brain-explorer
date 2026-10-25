@@ -13,6 +13,7 @@ import type {
   EvidenceMethod,
   PublicationCategory,
   ResearchRecord,
+  SourceId,
 } from "../../shared/types.js";
 import { findRegionMentions } from "../../shared/regions.js";
 
@@ -62,7 +63,11 @@ const MONTHS: Record<string, string> = {
 // ───────────────────────── classification helpers ─────────────────────────
 
 export function categorize(publicationTypes: string[]): PublicationCategory {
-  const t = publicationTypes.map((p) => p.toLowerCase());
+  // Lower-case and normalize the spellings other sources use ("JournalArticle", "research-article", "MetaAnalysis").
+  const t = publicationTypes.map((p) =>
+    p.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/[-_]/g, " ").replace(/^meta ?analysis$/, "meta-analysis"),
+  );
+  if (t.some((p) => p === "preprint" || p === "posted content")) return "preprint";
   const has = (s: string) => t.some((p) => p === s);
   if (has("meta-analysis")) return "meta-analysis";
   if (has("systematic review")) return "systematic-review";
@@ -72,7 +77,7 @@ export function categorize(publicationTypes: string[]): PublicationCategory {
   if (has("case reports")) return "case-report";
   if (t.some((p) => ["editorial", "comment", "letter", "news", "published erratum", "retraction of publication"].includes(p)))
     return "editorial-or-comment";
-  if (has("journal article") || has("comparative study") || t.some((p) => p.startsWith("research support"))) return "original-research";
+  if (has("journal article") || has("research article") || has("article") || has("comparative study") || t.some((p) => p.startsWith("research support"))) return "original-research";
   return "other";
 }
 
@@ -205,21 +210,7 @@ function normalizeArticle(a: any, retrievedAt: string): ResearchRecord | null {
   const meshTerms: string[] = (citation?.MeshHeadingList?.MeshHeading ?? []).map((m: any) => squash(text(m.DescriptorName)));
   const keywords: string[] = (citation?.KeywordList ?? []).flatMap((kl: any) => (kl?.Keyword ?? []).map((k: any) => squash(text(k))));
 
-  const abstractText = abstract.map((s) => s.text).join(" ");
-  const haystack = `${title} ${abstractText} ${keywords.join(" ")}`;
-  const category = categorize(publicationTypes);
-
-  const findingsSections = abstract.filter((s) => s.label && /^(results?|findings|conclusions?|interpretation)$/i.test(s.label));
-  const limitSections = abstract.filter((s) => s.label && /limitation/i.test(s.label));
-  const limitSentences = limitSections.length
-    ? []
-    : (abstractText.match(/[^.]*\blimitations?\b[^.]*\./gi) ?? []).map(squash);
-
-  const isSynthesis = ["meta-analysis", "systematic-review", "review"].includes(category);
-  const n = isSynthesis ? undefined : extractSampleSize(abstractText);
-  const regions = findRegionMentions(`${title} ${abstractText}`);
-
-  return {
+  return buildRecord({
     id: `pmid:${pmid}`,
     pmid,
     doi,
@@ -231,26 +222,103 @@ function normalizeArticle(a: any, retrievedAt: string): ResearchRecord | null {
     publicationYear: year ? Number(year) : undefined,
     abstract,
     publicationTypes,
+    meshTerms,
+    keywords,
+    sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+    source: "pubmed",
+    retrievedAt,
+  });
+}
+
+// ─────────────────────── shared record builder (all sources) ───────────────────────
+
+export interface RecordInput {
+  id: string;
+  pmid?: string;
+  doi?: string;
+  pmcid?: string;
+  title: string;
+  authors: Author[];
+  journal?: string;
+  publicationDate?: string;
+  publicationYear?: number;
+  abstract: AbstractSection[];
+  publicationTypes: string[];
+  /** MeSH terms (PubMed / Europe PMC only). Empty for sources without MeSH indexing. */
+  meshTerms: string[];
+  keywords: string[];
+  sourceUrl: string;
+  source: SourceId;
+  retrievedAt: string;
+  /** Set when the source itself says the work is a preprint. */
+  isPreprint?: boolean;
+}
+
+const SOURCE_NAME: Record<SourceId, string> = { pubmed: "PubMed", europepmc: "Europe PMC", openalex: "OpenAlex", semanticscholar: "Semantic Scholar" };
+
+/** Keyword fallbacks for sources without MeSH indexing (clearly labeled as keyword-derived). */
+function speciesFromText(t: string): string[] {
+  const out: string[] = [];
+  if (/\b(participants|patients|volunteers|adolescents|children|adults|students|individuals|humans?)\b/i.test(t)) out.push("Humans");
+  if (/\b(mice|mouse)\b/i.test(t)) out.push("Mice");
+  if (/\brats?\b/i.test(t)) out.push("Rats");
+  if (/\b(macaques?|monkeys?)\b/i.test(t)) out.push("Primates");
+  return out;
+}
+function agesFromText(t: string): AgeGroup[] {
+  const out = new Set<AgeGroup>();
+  if (/\b(children|child|kids|pediatric|paediatric)\b/i.test(t)) out.add("child");
+  if (/\b(adolescen\w*|teen\w*|youths?)\b/i.test(t)) out.add("adolescent");
+  if (/\byoung adults?\b/i.test(t)) out.add("young-adult");
+  if (/\b(older adults?|elderly|aged \d{2,} and older)\b/i.test(t)) out.add("older-adult");
+  return [...out];
+}
+
+export function buildRecord(input: RecordInput): ResearchRecord {
+  const { title, abstract, publicationTypes, meshTerms, keywords, doi, source } = input;
+  const sourceName = SOURCE_NAME[source];
+  const hasMesh = meshTerms.length > 0;
+  const abstractText = abstract.map((s) => s.text).join(" ");
+  const haystack = `${title} ${abstractText} ${keywords.join(" ")}`;
+  const category = input.isPreprint ? "preprint" : categorize(publicationTypes);
+
+  const findingsSections = abstract.filter((s) => s.label && /^(results?|findings|conclusions?|interpretation)$/i.test(s.label));
+  const limitSections = abstract.filter((s) => s.label && /limitation/i.test(s.label));
+  const limitSentences = limitSections.length ? [] : (abstractText.match(/[^.]*\blimitations?\b[^.]*\./gi) ?? []).map(squash);
+
+  const isSynthesis = ["meta-analysis", "systematic-review", "review"].includes(category);
+  const n = isSynthesis ? undefined : extractSampleSize(abstractText);
+
+  return {
+    id: input.id,
+    pmid: input.pmid,
+    doi,
+    pmcid: input.pmcid,
+    title,
+    authors: input.authors,
+    journal: input.journal,
+    publicationDate: input.publicationDate,
+    publicationYear: input.publicationYear,
+    abstract,
+    publicationTypes,
     category: {
       value: category,
-      provenance: "pubmed-indexing",
-      note: `From PubMed publication type: ${publicationTypes.join(", ") || "none listed"}`,
+      provenance: source === "pubmed" || source === "europepmc" ? "pubmed-indexing" : "source",
+      note: input.isPreprint
+        ? `${sourceName} lists this as a preprint — it has not been peer reviewed.`
+        : `From ${sourceName} publication type: ${publicationTypes.join(", ") || "none listed"}`,
     },
     methods: {
       value: detectMethods(haystack, meshTerms),
       provenance: "keyword-derived",
       note: "Detected from words in the title, abstract and MeSH terms. May be incomplete or wrong — check the paper.",
     },
-    species: {
-      value: meshTerms.filter((m) => SPECIES_MESH.includes(m)),
-      provenance: "pubmed-indexing",
-      note: "From PubMed MeSH indexing.",
-    },
-    ageGroups: {
-      value: ageGroupsFromMesh(meshTerms),
-      provenance: "pubmed-indexing",
-      note: "From PubMed MeSH age-group indexing. Absence does not mean an age group was excluded.",
-    },
+    species: hasMesh
+      ? { value: meshTerms.filter((m) => SPECIES_MESH.includes(m)), provenance: "pubmed-indexing", note: "From MeSH indexing." }
+      : { value: speciesFromText(haystack), provenance: "keyword-derived", note: `${sourceName} has no species indexing; detected from abstract words — verify.` },
+    ageGroups: hasMesh
+      ? { value: ageGroupsFromMesh(meshTerms), provenance: "pubmed-indexing", note: "From MeSH age-group indexing. Absence does not mean an age group was excluded." }
+      : { value: agesFromText(haystack), provenance: "keyword-derived", note: `${sourceName} has no age indexing; detected from abstract words — verify.` },
     sampleSize:
       n !== undefined
         ? { value: n, provenance: "keyword-derived", note: "Auto-extracted from a sample-size statement in the abstract. Verify in the paper." }
@@ -258,7 +326,7 @@ function normalizeArticle(a: any, retrievedAt: string): ResearchRecord | null {
     meshTerms,
     keywords,
     regionsMentioned: {
-      value: regions,
+      value: findRegionMentions(`${title} ${abstractText}`),
       provenance: "keyword-derived",
       note: "Region names that appear in the title or abstract. A mention is not a finding about that region.",
     },
@@ -270,10 +338,16 @@ function normalizeArticle(a: any, retrievedAt: string): ResearchRecord | null {
       : limitSentences.length
         ? { value: limitSentences.join(" "), provenance: "keyword-derived", note: "Sentences in the abstract that mention limitations." }
         : undefined,
-    sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+    sourceUrl: input.sourceUrl,
     doiUrl: doi ? `https://doi.org/${doi}` : undefined,
-    source: "pubmed",
-    retrievedAt,
-    verification: "retrieved-from-pubmed",
+    source,
+    foundIn: [source],
+    peerReview: input.isPreprint
+      ? { value: "preprint", provenance: "source", note: `${sourceName} marks this as a preprint (not yet peer reviewed).` }
+      : category === "editorial-or-comment" || category === "other"
+        ? { value: "unknown", provenance: "source" }
+        : { value: "peer-reviewed", provenance: source === "pubmed" ? "pubmed-indexing" : "source", note: `Indexed by ${sourceName} as a journal publication.` },
+    retrievedAt: input.retrievedAt,
+    verification: `retrieved-from-${source}`,
   };
 }

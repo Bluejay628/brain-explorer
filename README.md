@@ -112,20 +112,33 @@ Open http://localhost:5173.
 | Command | What it does |
 |---|---|
 | `npm run dev` | Server + website with live reload |
-| `npm run seed` | Fill `data/library.json` with real PubMed records (safe to re-run) |
+| `npm run seed` | Fill `data/library.json` with real records from all four databases (safe to re-run) |
+| `npm run check` | Plain-language check of your `.env`, API key and library (never prints the key) |
 | `npm test` | Run the automated tests |
 | `npm run typecheck` | TypeScript type-check |
 | `npm run build` then `npm start` | Production build, served by the Express server on :8787 |
 
 ## Data sources
 
-| Source | Used for | Notes |
-|---|---|---|
-| **PubMed / NCBI E-utilities** ([docs](https://www.ncbi.nlm.nih.gov/books/NBK25501/)) | Study metadata and abstracts | Rate-limited client (`server/research/pubmed.ts`) with retries and timeouts. Abstracts may be copyrighted by publishers; the app shows them for reference with links to the source. See NLM's [terms](https://www.nlm.nih.gov/databases/download/terms_and_conditions.html). |
-| **NeuroVault** ([neurovault.org](https://neurovault.org/)) | Checking whether authors published statistical brain maps | Exact DOI match only. Maps are linked, not drawn. |
-| **Claude API** ([docs](https://platform.claude.com/docs/en/api/messages/create)) | Writing the structured answer from retrieved studies | Server-side only. Only the question and public abstracts are sent. Uses the server-side refusal fallback (`fallbacks: "default"`). |
+Brain Explorer searches **four official, free research databases** in parallel. You can turn each one on or off in **Settings**.
 
-The local library is a JSON file (`data/library.json`, git-ignored). It holds only records fetched from PubMed. To add a specific paper, put its PMID in `EXTRA_PMIDS` in `scripts/seed-library.ts`, or open `/study/<PMID>` in the app.
+| Source | Coverage | Used for | Notes |
+|---|---|---|---|
+| **PubMed / NCBI E-utilities** ([docs](https://www.ncbi.nlm.nih.gov/books/NBK25501/)) | ~38M biomedical citations | Metadata, abstracts, expert MeSH indexing (age groups, species) | Optional `NCBI_API_KEY` raises the rate limit. See NLM [terms](https://www.nlm.nih.gov/databases/download/terms_and_conditions.html). |
+| **Europe PMC** ([docs](https://europepmc.org/RestfulWebService)) | PubMed + extra life-science journals, open full texts, **preprints** | Same as PubMed, plus preprints | No key. Preprints are labeled "not peer reviewed". |
+| **OpenAlex** ([docs](https://docs.openalex.org/)) | ~250M works from all publishers | Broad coverage of medicine, neuroscience and psychology journals | No key. Limited to fields 27/28/32 and works with abstracts. Set `CONTACT_EMAIL` for faster, more reliable access. Data is CC0. |
+| **Semantic Scholar** ([docs](https://api.semanticscholar.org/api-docs/graph)) | ~200M papers | Extra psychology and neuroscience coverage | Optional `SEMANTIC_SCHOLAR_API_KEY`; without it, a shared public rate limit applies, so it may be slow. |
+| **NeuroVault** ([neurovault.org](https://neurovault.org/)) | Published statistical brain maps | Checking whether authors shared maps | Exact DOI match only. Maps are linked, not drawn. |
+| **Claude API** ([docs](https://platform.claude.com/docs/en/api/messages/create)) | — | Writing the structured answer from retrieved studies | Server-side only. Only the question and public abstracts are sent. |
+
+How the sources work together:
+- The **same paper found in several databases is merged** (by PMID, DOI or title). The record remembers every database it appeared in ("Found in: PubMed · OpenAlex").
+- **Age-group searches** for the character only run on PubMed and Europe PMC, which have expert age indexing. For other sources, age and species are detected from abstract words and labeled *keyword-derived*.
+- If one database is down or slow, the others still return results, and the answer's **Search coverage** shows exactly which databases were searched and which failed.
+- **Preprints** (not yet peer reviewed) are labeled in red. The AI is told to say when it relies on one.
+- Only these databases are searched, not the general web. That is deliberate: every record has a traceable identifier and a source link.
+
+The local library (`data/library.json`, git-ignored) holds only records fetched from these databases. To add a specific paper, put its PMID in `EXTRA_PMIDS` in `scripts/seed-library.ts`, or open `/study/<PMID>` in the app.
 
 ## 3D brain model: sources and licenses
 
@@ -146,8 +159,9 @@ To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, 
 
 ## Testing
 
-**Automated** (`npm test`, 50 tests):
+**Automated** (`npm test`, 65 tests):
 - `tests/research.test.ts`: PubMed XML parsing, missing-data handling, sample-size extraction, deduplication, query building, retry/rate-limit handling, malformed responses, search coverage reporting, NeuroVault DOI matching.
+- `tests/sources.test.ts`: Europe PMC, OpenAlex and Semantic Scholar parsing; preprint labeling; cross-database merging; one source failing doesn't block others; age searches only where supported; user's source choice respected.
 - `tests/character.test.ts`: character intent (topic cleanup, everyday→research terms), hormones only when asked, age-group mapping, population labels, textbook background never counted as a finding, age-matched PubMed search first, region hierarchy integrity.
 - `tests/integrity.test.ts`: intent extraction (no silent filters), citation validation (fabricated citations removed), unsupported region claims, insufficient-evidence behavior, retrieval-only mode, PubMed-failure honesty, API key not exposed, input validation.
 
@@ -173,7 +187,7 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 ## Known limitations
 
 - **The 3D brain is an average adult brain**, not age-specific. Atlas boundaries are approximate for any individual.
-- **Live PubMed and NeuroVault calls have not yet been tested end-to-end.** They were blocked by the network policy of the cloud environment the app was built in. The parsing and error handling are unit-tested against PubMed-format sample data. Run `npm run seed` locally to confirm the live connection works.
+- **Live calls to PubMed, Europe PMC, OpenAlex, Semantic Scholar and NeuroVault have not yet been tested end-to-end.** They were blocked by the network policy of the cloud environment the app was built in. The parsing and error handling are unit-tested against PubMed-format sample data. Run `npm run seed` locally to confirm the live connection works.
 - **The Claude integration has not yet been run with a real key.** The request is type-checked against the official SDK, and the validation and fallback logic is tested with a stub.
 - **Methods, sample size and region mentions are keyword-detected** from abstracts and can be wrong. The UI labels them as such.
 - **Abstracts only.** The AI reads abstracts, not full papers, so details such as limitations are often missing.

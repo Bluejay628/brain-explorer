@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ResearchRecord } from "../../shared/types";
 import { useStore } from "../store";
-import { EvidenceChips, formatAuthors } from "./Evidence";
+import { EvidenceChips, formatAuthors, sourceLinkLabel } from "./Evidence";
 import { IconBookmark, IconBookmarkFilled, IconExternal } from "../icons";
 
 export function SaveButton({ record, small = false }: { record: ResearchRecord; small?: boolean }) {
@@ -37,8 +37,8 @@ export function StudyCard({ record, index, highlight }: { record: ResearchRecord
           <div className="row wrap" style={{ marginTop: 10, justifyContent: "space-between" }}>
             <EvidenceChips record={record} />
             <div className="row" style={{ gap: 4 }}>
-              <a className="btn sm ghost" href={record.sourceUrl} target="_blank" rel="noreferrer" title="Open on PubMed">
-                PubMed <IconExternal size={13} />
+              <a className="btn sm ghost" href={record.sourceUrl} target="_blank" rel="noreferrer" title={`Open on ${sourceLinkLabel(record)}`}>
+                {sourceLinkLabel(record)} <IconExternal size={13} />
               </a>
               <SaveButton record={record} small />
             </div>

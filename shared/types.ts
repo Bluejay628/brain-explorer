@@ -29,6 +29,7 @@ export type PublicationCategory =
   | "original-research"
   | "case-report"
   | "editorial-or-comment"
+  | "preprint"
   | "other";
 
 /** Kind of evidence / method, detected from MeSH terms and abstract keywords. */
@@ -51,7 +52,20 @@ export interface Author {
   lastName?: string;
   foreName?: string;
   collective?: string;
+  /** Full display name when a source doesn't split first/last names. */
+  fullName?: string;
 }
+
+/** External research databases Brain Explorer can search. */
+export type SourceId = "pubmed" | "europepmc" | "openalex" | "semanticscholar";
+
+export const SOURCE_INFO: Record<SourceId, { name: string; description: string; supportsAgeFilter: boolean }> = {
+  pubmed: { name: "PubMed", description: "U.S. National Library of Medicine — ~38M biomedical citations with expert MeSH indexing.", supportsAgeFilter: true },
+  europepmc: { name: "Europe PMC", description: "PubMed plus extra life-science journals, open full texts and preprints (EMBL-EBI).", supportsAgeFilter: true },
+  openalex: { name: "OpenAlex", description: "Open index of ~250M scholarly works across all publishers; limited here to medicine, neuroscience and psychology.", supportsAgeFilter: false },
+  semanticscholar: { name: "Semantic Scholar", description: "AI2's index of ~200M papers; limited here to medicine, biology and psychology.", supportsAgeFilter: false },
+};
+export const ALL_SOURCES = Object.keys(SOURCE_INFO) as SourceId[];
 
 export interface AbstractSection {
   label?: string; // e.g. "METHODS", "RESULTS" when the abstract is structured
@@ -71,7 +85,7 @@ export interface ResearchRecord {
   publicationDate?: string;
   publicationYear?: number;
   abstract: AbstractSection[];
-  /** Raw PubMed publication types, e.g. ["Journal Article", "Review"]. */
+  /** Raw publication types as reported by the source, e.g. ["Journal Article", "Review"]. */
   publicationTypes: string[];
   category: Derived<PublicationCategory>;
   methods: Derived<EvidenceMethod[]>;
@@ -90,13 +104,18 @@ export interface ResearchRecord {
   reportedLimitations?: Derived<string>;
   sourceUrl: string;
   doiUrl?: string;
-  source: "pubmed";
+  /** The database this record was first retrieved from. */
+  source: SourceId;
+  /** Every database the same paper was found in (after de-duplication). */
+  foundIn?: SourceId[];
+  /** Whether the paper has been through peer review, when the source says so. */
+  peerReview?: Derived<"peer-reviewed" | "preprint" | "unknown">;
   retrievedAt: string; // ISO timestamp
   verification: VerificationStatus;
 }
 
 export type VerificationStatus =
-  | "retrieved-from-pubmed" // fetched live from NCBI E-utilities and parsed
+  | `retrieved-from-${SourceId}` // fetched live from the source's official API and parsed
   | "manually-reviewed"; // a human checked this record against the original paper
 
 /** Filters a user can apply in the Research Library. */
@@ -107,24 +126,26 @@ export interface SearchFilters {
   methods?: EvidenceMethod[];
   ageGroups?: AgeGroup[];
   humansOnly?: boolean;
-  /** Server-side only: restrict PubMed to brain/behavior research. */
+  /** Server-side only: restrict external searches to brain/behavior research. */
   neuroFocus?: boolean;
 }
 
 export interface SearchRequest {
   query: string;
   filters?: SearchFilters;
-  /** Also query PubMed live (otherwise local library only). */
+  /** Also search external databases live (otherwise local library only). */
   includePubMed?: boolean;
+  /** Which external databases to search (default: all). */
+  sources?: SourceId[];
   limit?: number;
 }
 
 export interface SourceCoverage {
-  source: "local-library" | "pubmed";
+  source: "local-library" | SourceId;
   searched: boolean;
   query?: string;
   resultCount: number;
-  /** Total matching records reported by the source (PubMed reports this). */
+  /** Total matching records reported by the source. */
   totalAvailable?: number;
   error?: string;
 }

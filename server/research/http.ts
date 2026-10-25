@@ -31,10 +31,11 @@ export interface FetchOptions {
   retries?: number;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  headers?: Record<string, string>;
 }
 
 export async function politeFetch(url: string, opts: FetchOptions = {}): Promise<string> {
-  const { limiter, retries = 3, timeoutMs = 20_000, fetchImpl = fetch } = opts;
+  const { limiter, retries = 3, timeoutMs = 20_000, fetchImpl = fetch, headers = {} } = opts;
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)));
@@ -42,7 +43,7 @@ export async function politeFetch(url: string, opts: FetchOptions = {}): Promise
     try {
       const res = await fetchImpl(url, {
         signal: AbortSignal.timeout(timeoutMs),
-        headers: { Accept: "application/json, application/xml;q=0.9, */*;q=0.5" },
+        headers: { Accept: "application/json, application/xml;q=0.9, */*;q=0.5", ...headers },
       });
       if (res.ok) return await res.text();
       const retryable = res.status === 429 || res.status >= 500;

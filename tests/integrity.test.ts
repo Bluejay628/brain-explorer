@@ -135,7 +135,7 @@ describe("Research engine", () => {
       { question: "How does meditation change the insula?" },
       { library: tempLibrary([]), pubmed: vi.fn().mockRejectedValue(new Error("HTTP 503")), aiConfigured: () => false },
     );
-    expect(ans.directAnswer).toMatch(/PubMed could not be searched/);
+    expect(ans.directAnswer).toMatch(/Could not be searched: PubMed \(HTTP 503\)/);
     expect(ans.coverage.find((c) => c.source === "pubmed")).toMatchObject({ searched: false });
   });
 

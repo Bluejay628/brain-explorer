@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ServerStatus } from "../../shared/types";
+import { ALL_SOURCES, SOURCE_INFO, type ServerStatus } from "../../shared/types";
 import { api } from "../api";
 import { useStore } from "../store";
 import { IconShield } from "../icons";
@@ -42,8 +42,28 @@ export function Settings() {
           <div className="panel-title"><span className="dot" /> Research search</div>
           <label className="check">
             <input type="checkbox" checked={settings.includePubMedByDefault} onChange={(e) => updateSettings({ includePubMedByDefault: e.target.checked })} />
-            Search PubMed live when the local library doesn't have enough evidence
+            Search online research databases when the local library doesn't have enough evidence
           </label>
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }} disabled={!settings.includePubMedByDefault}>
+            <legend className="section-label">Databases to search</legend>
+            <div className="stack-sm">
+              {ALL_SOURCES.map((id) => (
+                <label key={id} className="check" style={{ alignItems: "flex-start" }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.sources.includes(id)}
+                    onChange={(e) =>
+                      updateSettings({ sources: e.target.checked ? [...settings.sources, id] : settings.sources.filter((x) => x !== id) })
+                    }
+                  />
+                  <span>
+                    <strong>{SOURCE_INFO[id].name}</strong>
+                    <span className="xs faint" style={{ display: "block" }}>{SOURCE_INFO[id].description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <label className="check">
             <input type="checkbox" checked={settings.humansOnlyByDefault} onChange={(e) => updateSettings({ humansOnlyByDefault: e.target.checked })} />
             Start library searches with "Human studies only"
@@ -66,7 +86,7 @@ export function Settings() {
                 {status.ncbiKeyConfigured ? "Configured (10 requests/s)" : "Not set (3 requests/s limit)"}
               </dd>
               <dt>Local library</dt>
-              <dd>{status.librarySize.toLocaleString()} PubMed records cached</dd>
+              <dd>{status.librarySize.toLocaleString()} research records cached</dd>
               <dt>3D model</dt>
               <dd>Average adult brain (FreeSurfer fsaverage5) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
             </dl>
@@ -88,7 +108,7 @@ export function Settings() {
           <div className="panel-title"><IconShield size={14} /> Data sources &amp; privacy</div>
           <div className="settings-grid">
             <div className="stack-sm small dim">
-              <p><strong className="dim">PubMed / NCBI E-utilities.</strong> Study metadata and abstracts are retrieved from the U.S. National Library of Medicine through its official API, following its rate limits. Your search terms are sent to NCBI. Abstracts may be copyrighted by their publishers; each record links to the original source.</p>
+              <p><strong className="dim">Research databases.</strong> Study metadata and abstracts come from the official free APIs of PubMed (U.S. National Library of Medicine), Europe PMC (EMBL-EBI), OpenAlex and Semantic Scholar (Allen Institute for AI), within their rate limits. Your search terms are sent to the databases you turn on. Abstracts may be copyrighted by their publishers; each record links to its source. Preprints are labeled because they have not been peer reviewed.</p>
               <p><strong className="dim">NeuroVault.</strong> When you check for brain maps, the study's DOI is sent to NeuroVault to look for maps the authors published. Brain Explorer never creates its own maps.</p>
               <p><strong className="dim">Claude API (Anthropic).</strong> When AI answers are enabled, your question and the retrieved public study abstracts are sent from the server to Anthropic to write the summary. No account, name or other personal data is sent.</p>
             </div>

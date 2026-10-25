@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { config } from "../config.js";
 import { REGIONS } from "../../shared/regions.js";
-import type { CharacterProfile, ExtractedIntent, PopulationMatch, ResearchRecord } from "../../shared/types.js";
+import { SOURCE_INFO, type CharacterProfile, type ExtractedIntent, type PopulationMatch, type ResearchRecord } from "../../shared/types.js";
 import type { BrainRegion } from "../../shared/regions.js";
 import { ModelAnswerSchema, type ModelAnswer } from "./schema.js";
 
@@ -25,6 +25,7 @@ Evidence rules:
 - Separate what authors reported ("reported-finding") from your synthesis across studies ("interpretation"), proposed explanations ("hypothesis") and unanswered questions ("open-question").
 - Be precise about evidence strength: correlation vs causation; behavioral vs structural MRI vs functional MRI vs connectivity vs EEG vs animal findings; reviews and meta-analyses vs new experiments. Brain activation does not show that a region uniquely causes a behavior.
 - Keep disagreements visible under mixedOrContradictory instead of forcing a consensus.
+- Records come from several databases (PubMed, Europe PMC, OpenAlex, Semantic Scholar). Preprints have not been peer reviewed: if you rely on one, say so in that sentence, and prefer peer-reviewed evidence when both exist.
 - No invented numbers, coordinates, effect sizes or percentages.
 - If the records do not actually address the question, set status to "insufficient-evidence", say what is missing, and leave mainFindings and studentExplanation empty.
 
@@ -52,7 +53,8 @@ function formatRecord(r: ResearchRecord, match?: PopulationMatch): string {
     `Title: ${r.title}`,
     `Authors: ${authors}${r.authors.length > 3 ? " et al." : ""}`,
     `Journal / year: ${r.journal ?? "not reported"} / ${r.publicationYear ?? "not reported"}`,
-    `Publication type (PubMed): ${r.publicationTypes.join(", ") || "not reported"}`,
+    `Found in: ${(r.foundIn ?? [r.source]).map((id) => SOURCE_INFO[id].name).join(", ")}`,
+    `Publication type: ${r.publicationTypes.join(", ") || "not reported"}${r.peerReview?.value === "preprint" ? " — PREPRINT, not peer reviewed" : ""}`,
     `Species (MeSH): ${r.species.value.join(", ") || "not indexed"}`,
     `Age groups (MeSH): ${r.ageGroups.value.join(", ") || "not indexed"}`,
     ...(match ? [`Match with the character: ${match.note}`] : []),

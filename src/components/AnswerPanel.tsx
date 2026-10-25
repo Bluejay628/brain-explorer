@@ -20,7 +20,13 @@ const CONFIDENCE = {
   insufficient: { label: "Insufficient", width: "10%", color: "var(--red)" },
 };
 
-const SOURCE_LABEL: Record<SourceCoverage["source"], string> = { "local-library": "Local research library", pubmed: "PubMed (NCBI)" };
+const SOURCE_LABEL: Record<SourceCoverage["source"], string> = {
+  "local-library": "Local research library",
+  pubmed: "PubMed (NCBI)",
+  europepmc: "Europe PMC",
+  openalex: "OpenAlex",
+  semanticscholar: "Semantic Scholar",
+};
 
 function PopulationBadge({ m }: { m?: PopulationMatch }) {
   if (!m) return null;
@@ -221,7 +227,7 @@ export function AnswerPanel({ answer, onSelectRegion }: Props) {
               <span>
                 {SOURCE_LABEL[c.source]}
                 {c.error && <span className="faint"> — not searched: {c.error}</span>}
-                {!c.searched && !c.error && <span className="faint"> — not needed (enough local evidence)</span>}
+                {!c.searched && !c.error && <span className="faint"> — not needed (enough evidence already)</span>}
               </span>
               <span className="mono faint">
                 {c.searched ? `${c.resultCount} found${c.totalAvailable !== undefined && c.source === "pubmed" ? ` of ${c.totalAvailable.toLocaleString()}` : ""}` : "—"}
@@ -230,7 +236,7 @@ export function AnswerPanel({ answer, onSelectRegion }: Props) {
           ))}
         </div>
         <p className="xs faint" style={{ marginTop: 8 }}>
-          No other sources (web search, full-text databases) were searched.
+          Only the databases listed above were searched — not the general web.
           {answer.background.length > 0 && ` Textbook background used: ${answer.background.map((b) => b.name).join(", ")}.`}
         </p>
         <hr className="divider" />

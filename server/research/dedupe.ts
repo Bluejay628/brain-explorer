@@ -14,7 +14,8 @@ function completeness(r: ResearchRecord): number {
     (r.doi ? 1 : 0) +
     (r.pmid ? 1 : 0) +
     r.meshTerms.length / 100 +
-    (r.verification === "manually-reviewed" ? 10 : 0)
+    (r.verification === "manually-reviewed" ? 10 : 0) +
+    (r.source === "pubmed" ? 0.5 : 0) // PubMed records carry expert MeSH indexing
   );
 }
 
@@ -41,8 +42,11 @@ export function dedupeRecords(records: ResearchRecord[]): ResearchRecord[] {
       kept[existingPos] = {
         ...better,
         doi: better.doi ?? other.doi,
+        pmid: better.pmid ?? other.pmid,
         pmcid: better.pmcid ?? other.pmcid,
         doiUrl: better.doiUrl ?? other.doiUrl,
+        // Remember every database the paper was found in.
+        foundIn: [...new Set([...(better.foundIn ?? [better.source]), ...(other.foundIn ?? [other.source])])],
       };
       keys.forEach((k) => index.set(k, existingPos));
     }

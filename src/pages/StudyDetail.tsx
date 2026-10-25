@@ -5,7 +5,7 @@ import { REGION_BY_ID } from "../../shared/regions";
 import { api } from "../api";
 import { useStore } from "../store";
 import { SaveButton } from "../components/StudyCard";
-import { AGE_LABEL, CATEGORY_HELP, CategoryChip, METHOD_LABEL, PROVENANCE_LABEL } from "../components/Evidence";
+import { AGE_LABEL, CATEGORY_HELP, CategoryChip, METHOD_LABEL, PROVENANCE_LABEL, foundInLabel, sourceLinkLabel } from "../components/Evidence";
 import { BrainMapStatus } from "../components/BrainMaps";
 import { IconArrowLeft, IconExternal, IconMap, IconX } from "../icons";
 
@@ -87,17 +87,19 @@ export function StudyDetail() {
           <div>
             <div className="row wrap" style={{ gap: 6, marginBottom: 10 }}>
               <CategoryChip record={r} />
-              <span className="chip mono">PMID {r.pmid}</span>
+              {r.pmid && <span className="chip mono">PMID {r.pmid}</span>}
+              <span className="chip" title="Databases this paper was found in">Found in: {foundInLabel(r)}</span>
             </div>
             <h1>{r.title}</h1>
             <p className="dim small" style={{ marginTop: 8 }}>
-              {r.authors.length ? r.authors.map((a) => a.collective ?? `${a.foreName ?? ""} ${a.lastName ?? ""}`.trim()).join(", ") : "Authors not listed"}
+              {r.authors.length ? r.authors.map((a) => a.collective ?? a.fullName ?? `${a.foreName ?? ""} ${a.lastName ?? ""}`.trim()).join(", ") : "Authors not listed"}
             </p>
             <p className="small" style={{ marginTop: 4 }}><em>{r.journal ?? "Journal not listed"}</em> · {r.publicationDate ?? "Publication date not reported"}</p>
           </div>
 
           <div className="row wrap">
-            <a className="btn primary" href={r.sourceUrl} target="_blank" rel="noreferrer">View on PubMed <IconExternal size={14} /></a>
+            <a className="btn primary" href={r.sourceUrl} target="_blank" rel="noreferrer">View on {sourceLinkLabel(r)} <IconExternal size={14} /></a>
+            {r.pmid && r.source !== "pubmed" && <a className="btn" href={`https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/`} target="_blank" rel="noreferrer">PubMed <IconExternal size={14} /></a>}
             {r.doiUrl && <a className="btn" href={r.doiUrl} target="_blank" rel="noreferrer">Publisher (DOI) <IconExternal size={14} /></a>}
             {r.pmcid && <a className="btn" href={`https://pmc.ncbi.nlm.nih.gov/articles/${r.pmcid}/`} target="_blank" rel="noreferrer">Free full text (PMC) <IconExternal size={14} /></a>}
             <SaveButton record={r} />
@@ -115,7 +117,7 @@ export function StudyDetail() {
             ) : (
               <p className="dim">No abstract is available in PubMed for this record. Open the original source for details.</p>
             )}
-            <div className="prov" style={{ marginTop: 12 }}>Verbatim from PubMed. Abstract text may be copyrighted by the publisher.</div>
+            <div className="prov" style={{ marginTop: 12 }}>Verbatim from {sourceLinkLabel(r)}. Abstract text may be copyrighted by the publisher.</div>
           </section>
 
           <section className="panel panel-pad">
@@ -176,7 +178,9 @@ export function StudyDetail() {
               <dt>MeSH terms</dt><dd className="xs">{r.meshTerms.join("; ") || NR}</dd>
               <dt>Keywords</dt><dd className="xs">{r.keywords.join("; ") || NR}</dd>
               <dt>Retrieved</dt><dd className="xs">{new Date(r.retrievedAt).toLocaleString()}</dd>
-              <dt>Verification</dt><dd className="xs">{r.verification === "manually-reviewed" ? "Manually reviewed against the paper" : "Retrieved automatically from PubMed (not manually reviewed)"}</dd>
+              <dt>Verification</dt><dd className="xs">{r.verification === "manually-reviewed" ? "Manually reviewed against the paper" : `Retrieved automatically from ${sourceLinkLabel(r)} (not manually reviewed)`}</dd>
+              <dt>Peer review</dt>
+              <dd className="xs">{r.peerReview?.value === "preprint" ? <span style={{ color: "var(--red)" }}>Preprint — not peer reviewed</span> : r.peerReview?.value === "peer-reviewed" ? "Published in a journal (peer reviewed)" : "Not reported"}<Prov d={r.peerReview} /></dd>
             </dl>
           </section>
           <Link to={`/explore?q=${encodeURIComponent(r.title)}`} className="btn">Ask about this topic</Link>

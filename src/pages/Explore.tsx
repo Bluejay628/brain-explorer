@@ -44,6 +44,7 @@ export function Explore() {
           character: { name, age: character.age },
           includeHormones: character.includeHormones,
           focus,
+          sources: settings.sources.length ? settings.sources : undefined,
         });
         setAnswer(res);
         addHistory({ kind: "question", value: q, label: q });
@@ -53,7 +54,7 @@ export function Explore() {
         setBusy(false);
       }
     },
-    [region, settings.includePubMedByDefault, name, character.age, character.includeHormones, addHistory],
+    [region, settings.includePubMedByDefault, settings.sources, name, character.age, character.includeHormones, addHistory],
   );
 
   // Ask whenever the ?q= parameter changes (from Home, history links, or the ask box).
@@ -164,7 +165,7 @@ export function Explore() {
               {lastAsk && <p className="small dim" style={{ marginBottom: 12 }}><span className="faint">Question:</span> {lastAsk.q}</p>}
               {busy && (
                 <div className="stack">
-                  <div className="row small dim"><span className="spinner" /> Searching research on people {name}'s age{settings.includePubMedByDefault ? " (library + PubMed)" : ""}, then checking every citation…</div>
+                  <div className="row small dim"><span className="spinner" /> Searching research on people {name}'s age{settings.includePubMedByDefault ? ` (library + ${settings.sources.length} online databases)` : ""}, then checking every citation…</div>
                   <StudyCardSkeleton />
                   <StudyCardSkeleton />
                 </div>

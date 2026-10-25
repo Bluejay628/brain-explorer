@@ -1,4 +1,4 @@
-import type { AgeGroup, EvidenceMethod, PublicationCategory, Provenance, ResearchRecord } from "../../shared/types";
+import { SOURCE_INFO, type AgeGroup, type EvidenceMethod, type PublicationCategory, type Provenance, type ResearchRecord } from "../../shared/types";
 
 export const CATEGORY_LABEL: Record<PublicationCategory, string> = {
   "meta-analysis": "Meta-analysis",
@@ -9,6 +9,7 @@ export const CATEGORY_LABEL: Record<PublicationCategory, string> = {
   "original-research": "Original research",
   "case-report": "Case report",
   "editorial-or-comment": "Editorial / comment",
+  preprint: "Preprint (not peer reviewed)",
   other: "Other publication",
 };
 
@@ -21,6 +22,7 @@ export const CATEGORY_HELP: Record<PublicationCategory, string> = {
   "original-research": "A study reporting new data. Could be experimental or observational — check the methods.",
   "case-report": "Describes one or a few individuals. Can raise hypotheses; cannot establish general patterns.",
   "editorial-or-comment": "Opinion or commentary, not new evidence.",
+  preprint: "Shared publicly before peer review. Other scientists have not yet checked it — treat findings as preliminary.",
   other: "Publication type not classified.",
 };
 
@@ -33,6 +35,7 @@ const CATEGORY_TONE: Record<PublicationCategory, string> = {
   "original-research": "cyan",
   "case-report": "",
   "editorial-or-comment": "",
+  preprint: "red",
   other: "",
 };
 
@@ -90,12 +93,24 @@ export function EvidenceChips({ record, max = 4 }: { record: ResearchRecord; max
         <span key={s} className="chip" title="From PubMed MeSH indexing">{s}</span>
       ))}
       {!record.abstract.length && <span className="chip amber">No abstract</span>}
+      <span className="chip" title="Databases this paper was found in">{foundInLabel(record)}</span>
     </div>
   );
 }
 
 export function formatAuthors(r: ResearchRecord, max = 3): string {
   if (!r.authors.length) return "Authors not listed";
-  const names = r.authors.slice(0, max).map((a) => a.collective ?? [a.lastName, a.foreName?.split(" ").map((p) => p[0]).join("")].filter(Boolean).join(" "));
+  const names = r.authors
+    .slice(0, max)
+    .map((a) => a.collective ?? ([a.lastName, a.foreName?.split(" ").map((p) => p[0]).join("")].filter(Boolean).join(" ") || a.fullName || ""));
   return names.join(", ") + (r.authors.length > max ? " et al." : "");
+}
+
+/** Which databases a record was found in, e.g. "PubMed · OpenAlex". */
+export function foundInLabel(r: ResearchRecord): string {
+  return (r.foundIn ?? [r.source]).map((id) => SOURCE_INFO[id]?.name ?? id).join(" · ");
+}
+
+export function sourceLinkLabel(r: ResearchRecord): string {
+  return SOURCE_INFO[r.source]?.name ?? "Source";
 }

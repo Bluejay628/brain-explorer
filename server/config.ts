@@ -20,6 +20,9 @@ export const config = {
   ncbiApiKey: clean(process.env.NCBI_API_KEY),
   ncbiEmail: clean(process.env.NCBI_EMAIL),
   ncbiTool: clean(process.env.NCBI_TOOL) ?? "brain-explorer",
+  /** Contact email sent to research APIs that ask for one (OpenAlex "polite pool", NCBI). */
+  contactEmail: clean(process.env.CONTACT_EMAIL) ?? clean(process.env.NCBI_EMAIL),
+  semanticScholarApiKey: clean(process.env.SEMANTIC_SCHOLAR_API_KEY),
   dataDir: clean(process.env.DATA_DIR) ?? path.resolve(here, "../data"),
   isProduction: process.env.NODE_ENV === "production",
 };

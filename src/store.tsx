@@ -5,13 +5,15 @@
 // Nothing here is sent to any server. Clearing browser data removes it.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CharacterProfile, ResearchRecord } from "../shared/types";
+import { ALL_SOURCES, type CharacterProfile, type ResearchRecord, type SourceId } from "../shared/types";
 
 export interface Settings {
   theme: "lab" | "contrast";
   includePubMedByDefault: boolean;
   humansOnlyByDefault: boolean;
   autoRotate: boolean;
+  /** Which online research databases to search. */
+  sources: SourceId[];
 }
 
 export interface CharacterState extends CharacterProfile {
@@ -26,7 +28,7 @@ export interface HistoryItem {
   at: string;
 }
 
-const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true };
+const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true, sources: ALL_SOURCES };
 const DEFAULT_CHARACTER: CharacterState = { name: "Leo", age: 16, includeHormones: false };
 
 function read<T>(key: string, fallback: T): T {
