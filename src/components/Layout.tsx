@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { IconBookmark, IconBrain, IconHome, IconLayers, IconLibrary, IconSettings } from "../icons";
 import { useStore } from "../store";
 
@@ -13,6 +14,7 @@ const NAV = [
 
 export function Layout() {
   const { saved } = useStore();
+  const { pathname } = useLocation();
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Main navigation">
@@ -31,7 +33,10 @@ export function Layout() {
         <div className="spacer" />
       </nav>
       <main className="main" id="main">
-        <Outlet />
+        {/* Keyed by page, so moving to another page clears a crash. */}
+        <ErrorBoundary key={pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

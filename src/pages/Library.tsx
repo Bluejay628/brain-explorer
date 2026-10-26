@@ -137,7 +137,7 @@ export function Library() {
               {externalCov.map((c) => (
                 <span key={c.source}>
                   <span className="faint">· </span>
-                  {SOURCE_INFO[c.source as SourceId].name}:{" "}
+                  {(SOURCE_INFO[c.source as SourceId]?.name ?? c.source)}:{" "}
                   {c.searched ? `${c.resultCount} (of ${c.totalAvailable?.toLocaleString() ?? "?"})` : c.error ? <span style={{ color: "var(--red)" }}>unavailable</span> : "not searched"}
                 </span>
               ))}
@@ -147,7 +147,7 @@ export function Library() {
             <div className="notice amber" style={{ marginBottom: 10 }}>
               <IconAlert size={16} />
               <span>
-                Could not reach: {failedCov.map((c) => `${SOURCE_INFO[c.source as SourceId].name} (${c.error})`).join("; ")}. Results from the other sources are still shown.
+                Could not reach: {failedCov.map((c) => `${(SOURCE_INFO[c.source as SourceId]?.name ?? c.source)} (${c.error})`).join("; ")}. Results from the other sources are still shown.
               </span>
             </div>
           )}

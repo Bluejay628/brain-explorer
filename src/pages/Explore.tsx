@@ -61,9 +61,12 @@ export function Explore() {
       setError(null);
       setTab("answer");
       setLastAsk({ q, focus });
-      // A question about a long-term disease starts its staging animation on the brain.
+      // A question about a long-term disease starts its staging animation on the brain;
+      // any other question clears it, so the brain never shows a disease the answer isn't about.
       const d = detectDisease(q);
-      if (d) pickDisease(d.id);
+      if (d) {
+        if (d.id !== diseaseId) pickDisease(d.id);
+      } else if (diseaseId) pickDisease(undefined);
       // On small screens, bring the answer into view.
       if (window.innerWidth < 1100) setTimeout(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
       try {
@@ -84,7 +87,7 @@ export function Explore() {
         setBusy(false);
       }
     },
-    [region, settings.includePubMedByDefault, settings.sources, settings.webSearch, name, character.age, character.includeHormones, addHistory],
+    [region, diseaseId, settings.includePubMedByDefault, settings.sources, settings.webSearch, name, character.age, character.includeHormones, addHistory],
   );
 
   // Ask whenever the ?q= parameter changes (from Home, history links, or the ask box).
