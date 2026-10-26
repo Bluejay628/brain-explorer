@@ -71,7 +71,7 @@ export function BrainViewer({
   const [supported] = useState(() => webglAvailable());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [spinning, setSpinning] = useState(autoRotate && !reducedMotion);
-  const [lines, setLines] = useState(true);
+  const [lines, setLines] = useState(false);
   const [isolation, setIsolation] = useState(0);
   const lineRef = useRef<SVGLineElement>(null);
   const dotRef = useRef<SVGCircleElement>(null);

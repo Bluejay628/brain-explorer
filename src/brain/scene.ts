@@ -36,7 +36,7 @@ function rampColor(t: number, out: THREE.Color): THREE.Color {
 interface ModelFile {
   quantization: number;
   regions: { key: string; display: string; lobe: string }[];
-  cortex: Record<"lh" | "rh", { positions: string; indices: string; sulc: string; labels: string; vertexCount: number }>;
+  cortex: Record<"lh" | "rh", { positions: string; indices: string; sulc: string; curv?: string; labels: string; vertexCount: number }>;
   subcortical: { key: string; hemi: string; positions: string; indices: string }[];
 }
 
@@ -58,14 +58,18 @@ export function loadModel(): Promise<ModelFile> {
 }
 
 // Realistic tissue colors (fresh brain tissue is pink-beige; grooves look deeper pink).
+// Like a photo of a fresh brain: peach crowns, rosier groove walls, and a thin
+// deep-magenta line along the bottom of each groove.
 const PAL = {
-  gyrus: new THREE.Color("#f2c0b2"),
-  sulcus: new THREE.Color("#a33f5b"),
-  deep: new THREE.Color("#e7a7a6"),
-  cerebellum: new THREE.Color("#eab9ae"),
-  stem: new THREE.Color("#ecc8ba"),
-  callosum: new THREE.Color("#f7eee8"),
-  boundary: new THREE.Color("#7a2a43"),
+  gyrus: new THREE.Color("#f1b896"),
+  sulcus: new THREE.Color("#d97f7c"),
+  groove: new THREE.Color("#9c1850"),
+  vessel: new THREE.Color("#b49ac8"),
+  deep: new THREE.Color("#eaa996"),
+  cerebellum: new THREE.Color("#eeb39a"),
+  stem: new THREE.Color("#f0c2aa"),
+  callosum: new THREE.Color("#f8efe8"),
+  boundary: new THREE.Color("#9c4a5e"),
 };
 const SELECT = new THREE.Color("#2f6fe4");
 const HOVER_MIX = 0.35;
@@ -81,6 +85,10 @@ interface CortexMesh {
   sulc: Float32Array; // -1..1 (positive = deep sulcus)
   boundary: Uint8Array; // 1 if vertex is on an atlas boundary
   mottle: Float32Array; // -1..1 decorative color variation
+  /** 0..1: how strongly this point sits in the bottom of a groove (from real curvature). */
+  groove: Float32Array;
+  /** 0..1 faint lavender specks, like small surface blood vessels (decoration, not data). */
+  vessel: Float32Array;
 }
 
 export class BrainScene {
@@ -98,7 +106,7 @@ export class BrainScene {
   private hovered: string | null = null;
   private cited = new Set<string>();
   private pinned: string[] = [];
-  private showBoundaries = true;
+  private showBoundaries = false;
   /** 0 = whole brain solid, 1 = everything except the selected part almost invisible. */
   private isolation = 0;
   private colorAtlas = false;
@@ -127,7 +135,7 @@ export class BrainScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMappingExposure = 0.92;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.setAttribute("aria-hidden", "true");
 
@@ -151,7 +159,7 @@ export class BrainScene {
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.3;
     pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight("#fff7f2", "#a88a88", 0.75));
+    this.scene.add(new THREE.HemisphereLight("#fff8f2", "#b08a84", 0.7));
     const key = new THREE.DirectionalLight("#fff1e8", 1.7);
     key.position.set(-3, 4, -2);
     this.scene.add(key);
@@ -214,6 +222,15 @@ export class BrainScene {
       // Gentle, fixed color variation so the surface looks like tissue rather than plastic (decoration, not data).
       const mottle = new Float32Array(c.vertexCount);
       for (let i = 0; i < c.vertexCount; i++) mottle[i] = tissueNoise(pos[i * 3] * 9, pos[i * 3 + 1] * 9, pos[i * 3 + 2] * 9);
+      // Groove lines: points that are both deep (sulc) and sharply bent inward (curvature).
+      const curv = c.curv ? Float32Array.from(new Int8Array(decode(c.curv)), (v) => v / 127) : sulc;
+      const groove = new Float32Array(c.vertexCount);
+      const vessel = new Float32Array(c.vertexCount);
+      for (let i = 0; i < c.vertexCount; i++) {
+        groove[i] = THREE.MathUtils.smoothstep(curv[i], 0.18, 0.6) * THREE.MathUtils.smoothstep(sulc[i], 0.0, 0.35);
+        const n = tissueNoise(pos[i * 3] * 38 + 7, pos[i * 3 + 1] * 38, pos[i * 3 + 2] * 38 - 3);
+        vessel[i] = THREE.MathUtils.smoothstep(n, 0.55, 0.9) * (1 - THREE.MathUtils.smoothstep(sulc[i], 0, 0.5));
+      }
       // Atlas boundaries: vertices with a neighbor in a different region.
       const boundary = new Uint8Array(c.vertexCount);
       for (let t = 0; t < idx.length; t += 3) {
@@ -223,7 +240,7 @@ export class BrainScene {
       const mesh = new THREE.Mesh(geo, this.cortexMaterial);
       mesh.userData.hemi = h;
       brain.add(mesh);
-      this.cortex[h] = { mesh, regionKeyOf, sulc, boundary, mottle };
+      this.cortex[h] = { mesh, regionKeyOf, sulc, boundary, mottle, groove, vessel };
     }
 
     for (const s of model.subcortical) {
@@ -556,9 +573,11 @@ export class BrainScene {
       for (let i = 0; i < c.regionKeyOf.length; i++) {
         const key = c.regionKeyOf[i];
         // Realistic shading: gyri (crowns) lighter, sulci (grooves) darker and pinker.
-        const depth = THREE.MathUtils.smoothstep(c.sulc[i], -0.6, 0.6);
-        tmp.copy(pal.gyrus).lerp(pal.sulcus, depth * 0.92);
-        tmp.multiplyScalar(1 + c.mottle[i] * 0.045);
+        const depth = THREE.MathUtils.smoothstep(c.sulc[i], -0.5, 0.7);
+        tmp.copy(pal.gyrus).lerp(pal.sulcus, depth * 0.75);
+        tmp.lerp(pal.groove, c.groove[i] * 0.95);
+        tmp.lerp(pal.vessel, c.vessel[i] * 0.3);
+        tmp.multiplyScalar(1 + c.mottle[i] * 0.04);
         const hl = key ? byKey.get(key) : undefined;
         const ov = key ? this.overlayCurrent.get(key) ?? 0 : 0;
         if (hl) tmp.lerp(hl, 0.72).multiplyScalar(1 - depth * 0.25);
@@ -572,7 +591,7 @@ export class BrainScene {
           tmp.lerp(ac, 0.6);
         }
         if (key && hoverKeys.includes(key)) tmp.lerp(new THREE.Color("#ffffff"), HOVER_MIX);
-        if (this.showBoundaries && c.boundary[i]) tmp.lerp(pal.boundary, 0.6);
+        if (this.showBoundaries && c.boundary[i]) tmp.lerp(pal.boundary, 0.42);
         const alpha = key && selectedKeys.has(key) ? 1 : fadedAlpha;
         col.setXYZW(i, tmp.r, tmp.g, tmp.b, alpha);
       }
@@ -622,6 +641,7 @@ export class BrainScene {
 
   private onDown = (e: PointerEvent) => {
     this.downAt = { x: e.clientX, y: e.clientY };
+    this.opts.onHover?.(null, 0, 0); // hide the name label while dragging
   };
   private onUp = (e: PointerEvent) => {
     if (!this.downAt) return;

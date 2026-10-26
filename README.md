@@ -200,12 +200,12 @@ The local library (`data/library.json`, git-ignored) holds only records fetched 
 
 ## 3D brain model: sources and licenses
 
-The model (`public/models/brain.json`, about 1.2 MB compressed) is built by `scripts/build-brain-model.py` from:
+The model (`public/models/brain.json`, about 2.4 MB compressed) is built in two steps: `scripts/build-brain-model.py` makes the deep structures and a first cortex, then `scripts/build-cortex-fsaverage6.py` swaps in the 4× more detailed fsaverage6 cortex (40,962 points per half). Sources:
 
 | Part | Source | License / terms |
 |---|---|---|
-| Cortical surface (pial) and sulcal depth | FreeSurfer **fsaverage5**, an average of 40 adult MRI scans (Fischl et al., 1999), as redistributed in the [nilearn](https://nilearn.github.io) Python package | FreeSurfer terms ([license](https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense)). nilearn lists the license as "unknown"; it is widely redistributed with attribution. **Check before commercial use.** |
-| Cortical regions | **Desikan-Killiany atlas** (Desikan et al., 2006, *NeuroImage* 31:968–980) on fsaverage5, via [ggseg.formats](https://github.com/ggsegverse/ggseg.formats) | ggseg code: MIT. Atlas: FreeSurfer distribution. |
+| Cortical surface (pial), sulcal depth and curvature | FreeSurfer **fsaverage6**, an average of 40 adult MRI scans (Fischl et al., 1999), from [TemplateFlow](https://www.templateflow.org) (`tpl-fsaverage`, `den-41k` files). The first version used fsaverage5 from the nilearn package; the script checks both line up exactly. | FreeSurfer terms ([license](https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense)). nilearn lists the license as "unknown"; it is widely redistributed with attribution. **Check before commercial use.** |
+| Cortical regions | **Desikan-Killiany atlas** (Desikan et al., 2006, *NeuroImage* 31:968–980) on fsaverage6, from TemplateFlow | ggseg code: MIT. Atlas: FreeSurfer distribution. |
 | Deep structures | FreeSurfer **aseg** structures on fsaverage5 (Fischl et al., 2002), via ggseg.formats | As above |
 | Gland markers | Hypothalamus, pituitary and pineal markers at approximate standard-brain positions | Written for this app and labeled "approximate" |
 
@@ -213,7 +213,9 @@ The deep-structure meshes use a different coordinate origin than the surfaces. T
 
 **Important limits:** this is an *average adult* brain. It is not the character's brain, and it shows where regions are, never brain activity. Children's and teens' brains differ in fine detail, such as cortical thickness and the timing of maturation.
 
-To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, download and unzip the nilearn wheel, then run `python scripts/build-brain-model.py <ggseg.formats dir> <nilearn fsaverage5 dir>`.
+To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, download and unzip the nilearn wheel, run `python scripts/build-brain-model.py <ggseg.formats dir> <nilearn fsaverage5 dir>`, then `python scripts/build-cortex-fsaverage6.py`.
+
+**How it is drawn.** The colors are chosen to look like fresh tissue: peach crowns, rosier groove walls, and a thin magenta line where the real curvature data says a groove bottoms out. Faint lavender specks (like small surface blood vessels) and slight color variation are decoration only, not data.
 
 ## Brain-cell data: source and limits
 
@@ -288,5 +290,5 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 - Study metadata and abstracts: from PubMed / NLM, with copyright held by the respective publishers. Every record links to its source.
 - Fonts: Inter and JetBrains Mono (SIL Open Font License) via Google Fonts.
 - Brain-cell data: Allen Brain Cell Atlas (Allen Institute), human whole-brain dataset; Siletti et al., *Science* 2023. See "Brain-cell data: source and limits".
-- 3D model: FreeSurfer fsaverage5 + Desikan-Killiany atlas + aseg, via nilearn (BSD-3) and ggseg.formats (MIT). See "3D brain model: sources and licenses".
+- 3D model: FreeSurfer fsaverage6 + Desikan-Killiany atlas (via TemplateFlow) and aseg (via ggseg.formats, MIT). See "3D brain model: sources and licenses".
 - Libraries: React, Three.js, Express, Zod, fast-xml-parser, Anthropic SDK (see `package.json`; all open-source).
