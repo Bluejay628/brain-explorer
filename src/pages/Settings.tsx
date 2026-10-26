@@ -98,7 +98,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
               <dt>Local library</dt>
               <dd>{status.librarySize.toLocaleString()} research records cached</dd>
               <dt>3D model</dt>
-              <dd>Average adult brain (FreeSurfer fsaverage5) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
+              <dd>Average adult brain (FreeSurfer fsaverage6) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
               <dt>Cell data</dt>
               <dd>Allen Brain Cell Atlas, human whole-brain dataset (Siletti et al., 2023), stored with the app</dd>
             </dl>
