@@ -49,3 +49,4 @@ export const IconDoc = (p: P) => <Svg {...p}><path d="M6 3h8l4 4v14H6z" /><path 
 export const IconClock = (p: P) => <Svg {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Svg>;
 export const IconMap = (p: P) => <Svg {...p}><path d="m3 6 6-2.5 6 2.5 6-2.5v14.5l-6 2.5-6-2.5-6 2.5z" /><path d="M9 3.5v14.5M15 6v14.5" /></Svg>;
 export const IconShield = (p: P) => <Svg {...p}><path d="M12 3 4.5 6v6c0 4.5 3.2 7.6 7.5 9 4.3-1.4 7.5-4.5 7.5-9V6z" /><path d="m9 12 2 2 4-4" /></Svg>;
+export const IconCamera = (p: P) => <Svg {...p}><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z" /><circle cx="12" cy="13.2" r="3.4" /></Svg>;

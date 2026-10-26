@@ -19,7 +19,7 @@ function toggle<T>(list: T[] | undefined, v: T): T[] {
 export function Library() {
   const { settings } = useStore();
   const [params, setParams] = useSearchParams();
-  const [query, setQuery] = useState(params.get("q") ?? "");
+  const [query, setQuery] = useState(params.get("sq") ?? "");
   const [filters, setFilters] = useState<SearchFilters>({ humansOnly: settings.humansOnlyByDefault || undefined });
   const [pubmed, setPubmed] = useState(settings.includePubMedByDefault);
   const [data, setData] = useState<SearchResponse | null>(null);
@@ -43,14 +43,20 @@ export function Library() {
   };
 
   useEffect(() => {
-    void run(params.get("q") ?? "");
+    void run(params.get("sq") ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params.get("sq")]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    setParams(query ? { q: query } : {}, { replace: true });
-    void run(query);
+    // Changing ?sq= starts the search (see the effect above); same text again → search again.
+    if (query === (params.get("sq") ?? "")) return void run(query);
+    setParams((p) => {
+      const next = new URLSearchParams(p);
+      if (query) next.set("sq", query);
+      else next.delete("sq");
+      return next;
+    }, { replace: true });
   };
   const setYear = (k: "yearFrom" | "yearTo", v: string) => setFilters((f) => ({ ...f, [k]: v ? Number(v) : undefined }));
   const activeCount = (filters.categories?.length ?? 0) + (filters.methods?.length ?? 0) + (filters.ageGroups?.length ?? 0) + (filters.yearFrom ? 1 : 0) + (filters.yearTo ? 1 : 0) + (filters.humansOnly ? 1 : 0);

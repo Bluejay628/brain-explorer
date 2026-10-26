@@ -21,7 +21,7 @@ export function Compare() {
   const [params] = useSearchParams();
   const { settings, character } = useStore();
   const name = character.name.trim() || "Leo";
-  const [mode, setMode] = useState<Mode>(params.get("d") ? "disease" : "situation");
+  const [mode, setMode] = useState<Mode>(params.get("cd") ? "disease" : "situation");
   const [selected, setSelected] = useState<string | null>(null);
 
   // ── situation mode ──
@@ -31,7 +31,7 @@ export function Compare() {
   const [current, setCurrent] = useState<{ title: string; q: string; focus?: string } | null>(null);
 
   // ── disease mode ──
-  const [diseaseId, setDiseaseId] = useState<string | undefined>(params.get("d") ?? undefined);
+  const [diseaseId, setDiseaseId] = useState<string | undefined>(params.get("cd") ?? undefined);
   const [stage, setStage] = useState(0);
   const [playing, setPlaying] = useState(false);
   const disease = diseaseId ? DISEASE_BY_ID.get(diseaseId) : undefined;
@@ -64,10 +64,10 @@ export function Compare() {
   // Arriving from the Brain Lab with ?q=…&f=… compares that question.
   const started = useRef(false);
   useEffect(() => {
-    const q = params.get("q");
+    const q = params.get("cq");
     if (q && !started.current) {
       started.current = true;
-      void run(q.length > 60 ? `${q.slice(0, 57)}…` : q, q, params.get("f") ?? undefined);
+      void run(q.length > 60 ? `${q.slice(0, 57)}…` : q, q, params.get("cf") ?? undefined);
     }
   }, [params, run]);
 
