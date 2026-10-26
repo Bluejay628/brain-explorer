@@ -15,7 +15,7 @@ const FIELDS = "title,abstract,year,publicationDate,venue,journal,publicationTyp
 export const S2_FIELDS_OF_STUDY = "Medicine,Psychology,Biology";
 
 const TYPE_MAP: Record<string, string> = {
-  "meta-analysis": "Meta-Analysis",
+  "meta-analysis": "MetaAnalysis",
   "systematic-review": "Review",
   review: "Review",
   "randomized-controlled-trial": "ClinicalTrial",

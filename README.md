@@ -106,18 +106,21 @@ These are enforced in code and covered by automated tests (`tests/integrity.test
 
 ## Setup
 
-You need **Node.js 20 or newer** (`node -v` to check).
+You need **Node.js 20.11 or newer** (`node -v` to check).
 
 ```bash
 git clone <your repo url>
 cd brain-explorer
 npm install
 cp .env.example .env      # then edit .env (see below)
-npm run seed              # downloads a starter library of real PubMed records
+npm run check             # plain-language check: .env, key, each database (never prints the key)
+npm run seed              # optional: downloads a starter library of real research records
 npm run dev               # starts the server (:8787) and the website (:5173)
 ```
 
 Open http://localhost:5173.
+
+To try the finished, published version on your own computer: `npm run preview`, then open http://localhost:8787.
 
 ### Environment variables (`.env`)
 
@@ -128,7 +131,12 @@ Open http://localhost:5173.
 | `NCBI_API_KEY` | Optional | Raises the PubMed limit from 3 to 10 requests/second. Free from your NCBI account settings. |
 | `NCBI_EMAIL` | Recommended | NCBI asks API users to give a contact email. |
 | `NCBI_TOOL` | Optional | Tool name sent to NCBI (default `brain-explorer`). |
-| `PORT` | Optional | Server port (default 8787). |
+| `CONTACT_EMAIL` | Recommended | Sent to OpenAlex/Semantic Scholar so they can contact you instead of blocking you. |
+| `SEMANTIC_SCHOLAR_API_KEY` | Optional | Higher Semantic Scholar rate limit (free on request). |
+| `MAX_AI_CALLS_PER_DAY` | Optional | Daily limit on Claude calls for the whole website (default 300). Protects your bill once the site is public. Repeated questions are answered from a cache and don't count. |
+| `TRUST_PROXY` | Optional | Number of proxies in front of the server (default 1 in production, 0 in dev). Needed so rate limits see real visitor IPs on hosts like Render. |
+| `PORT` | Optional | Server port (default 8787). Hosts like Render set this for you. |
+| `DATA_DIR` | Optional | Where `library.json` is stored (default `data/`). |
 
 **Never put keys in front-end code, and never commit `.env`.** It is already listed in `.gitignore`. The `/api/status` endpoint only reports *whether* a key is set, never its value (there's a test for this).
 
@@ -138,10 +146,30 @@ Open http://localhost:5173.
 |---|---|
 | `npm run dev` | Server + website with live reload |
 | `npm run seed` | Fill `data/library.json` with real records from all four databases (safe to re-run) |
-| `npm run check` | Plain-language check of your `.env`, API key and library (never prints the key) |
+| `npm run check` | Plain-language check of your `.env`, API key, each research database, the library and the build (never prints the key) |
 | `npm test` | Run the automated tests |
 | `npm run typecheck` | TypeScript type-check |
-| `npm run build` then `npm start` | Production build, served by the Express server on :8787 |
+| `npm run preview` | Build the website and run it exactly as it would be published, on :8787 |
+| `npm run build` then `npm start` | Same thing in two steps (this is what a hosting service runs) |
+
+## Publishing it on the internet
+
+The app is one Node.js server that serves both the website and the `/api`. Any host that runs Node 20+ works. It is **not** a static site, so GitHub Pages can't run it (Pages can't keep your API key secret).
+
+**Easiest: Render (free plan)**
+1. Push your code to GitHub (`.env` is never pushed; `.gitignore` blocks it).
+2. Go to https://render.com, sign in with GitHub, click **New + → Blueprint**, and pick this repository. Render reads `render.yaml`.
+3. When it asks for `ANTHROPIC_API_KEY`, paste your key **there** (in Render's dashboard, never in a file). Also fill `NCBI_EMAIL` and `CONTACT_EMAIL` with your email. Leave the key blank for a free retrieval-only site.
+4. Click **Apply**. After the build (a few minutes) you get a link like `https://brain-explorer-xxxx.onrender.com`.
+5. Check `https://<your-link>/api/health` shows `{"ok":true}` and Settings → Server status shows the AI engine as configured.
+
+**Any other host / Docker:** build with `npm ci && npm run build`, start with `npm start`, health check at `/api/health`. A `Dockerfile` is included (`docker build -t brain-explorer . && docker run -p 8787:8787 -e ANTHROPIC_API_KEY=... brain-explorer`).
+
+**Before you share the link:**
+- Set a monthly spending limit at console.anthropic.com → Billing → Limits. Each AI answer costs a few cents (more when web search runs). `MAX_AI_CALLS_PER_DAY` adds a second safety net.
+- The free Render plan sleeps after ~15 minutes without visitors; the first visit after that takes ~30–60 seconds.
+- On free hosts the disk is temporary, so the library cache is wiped on each restart. That's fine: the app searches the databases live.
+- Each visitor's saved studies and settings stay in their own browser.
 
 ## Data sources
 
@@ -185,7 +213,7 @@ To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, 
 
 ## Testing
 
-**Automated** (`npm test`, 86 tests):
+**Automated** (`npm test`, 87 tests):
 - `tests/research.test.ts`: PubMed XML parsing, missing-data handling, sample-size extraction, deduplication, query building, retry/rate-limit handling, malformed responses, search coverage reporting, NeuroVault DOI matching.
 - `tests/diseases.test.ts`: disease models use only real, drawable atlas regions; stages never improve; each model names its source; disease detection in questions.
 - `tests/lifestage.test.ts`: ages 3–90, life stages, age-appropriate situations and days; the character's own description ("a 16-year-old teenage boy") never becomes a hidden age filter.
@@ -223,7 +251,7 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 - **Abstracts only.** The AI reads abstracts, not full papers, so details such as limitations are often missing.
 - **Local search is simple keyword matching.** Fine for hundreds of records; a real search index would be needed for many thousands.
 - **Saved studies live in one browser.** There are no accounts or sync.
-- **Rate limiting is in-memory.** It resets when the server restarts, which is fine for one server.
+- **Rate limiting, the daily AI cap and the answer cache are in-memory.** They reset when the server restarts, which is fine for one server.
 
 ## Planned improvements
 
@@ -231,7 +259,7 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 - Age-specific brain templates for children and teens.
 - Manually reviewed "featured" studies (`verification: "manually-reviewed"`).
 - Per-study AI summaries clearly labeled as AI interpretation.
-- Europe PMC as a second source (open-access full text).
+- Europe PMC open-access full text (currently abstracts only).
 - Streaming answers so text appears while it's being written.
 
 ## Licensing and attribution

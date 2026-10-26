@@ -24,5 +24,15 @@ export const config = {
   contactEmail: clean(process.env.CONTACT_EMAIL) ?? clean(process.env.NCBI_EMAIL),
   semanticScholarApiKey: clean(process.env.SEMANTIC_SCHOLAR_API_KEY),
   dataDir: clean(process.env.DATA_DIR) ?? path.resolve(here, "../data"),
-  isProduction: process.env.NODE_ENV === "production",
+  /** The built website (from `npm run build`). */
+  distDir: path.resolve(here, "../dist"),
+  /** Production mode: `npm start` passes --production (works on Windows, Mac and Linux). */
+  isProduction: process.env.NODE_ENV === "production" || process.argv.includes("--production"),
+  /**
+   * Hosting services (Render, Railway, Fly…) put a proxy in front of the app. Trusting it
+   * lets rate limits see each visitor's real address. Default: on in production.
+   */
+  trustProxy: clean(process.env.TRUST_PROXY) ?? (process.env.NODE_ENV === "production" || process.argv.includes("--production") ? "1" : "0"),
+  /** Safety cap on paid AI calls per day (protects the API key on a public site). */
+  maxAiCallsPerDay: Number(clean(process.env.MAX_AI_CALLS_PER_DAY) ?? 300),
 };

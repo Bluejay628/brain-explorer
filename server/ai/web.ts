@@ -11,6 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config.js";
 import type { ExtractedIntent, WebSource } from "../../shared/types.js";
 import { AiError } from "./claude.js";
+import { takeAiCall } from "./budget.js";
 
 /** Reputable health, science and education sites (subdomains included). */
 export const TRUSTED_DOMAINS = [
@@ -96,6 +97,7 @@ let client: Anthropic | null = null;
 
 export async function searchTrustedWeb(question: string, intent: ExtractedIntent): Promise<WebSource[]> {
   if (!config.anthropicApiKey) throw new AiError("No API key", "The AI engine is not configured.");
+  if (!takeAiCall()) throw new AiError("Daily cap", "Today's AI limit for this website has been reached.");
   client ??= new Anthropic({ apiKey: config.anthropicApiKey, timeout: 120_000, maxRetries: 2 });
 
   const prompt = [

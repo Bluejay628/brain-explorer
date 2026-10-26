@@ -1,0 +1,24 @@
+# One-click deploy on Render (https://render.com) — "New +" → "Blueprint" → pick this repo.
+# Render asks you to type the secret values (like ANTHROPIC_API_KEY) in its dashboard;
+# they are never stored in this file or in GitHub.
+services:
+  - type: web
+    name: brain-explorer
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: ANTHROPIC_API_KEY
+        sync: false # you paste this in the Render dashboard (optional: without it, retrieval-only mode)
+      - key: NCBI_EMAIL
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false
+      - key: MAX_AI_CALLS_PER_DAY
+        value: "300"

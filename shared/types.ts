@@ -299,5 +299,6 @@ export interface ServerStatus {
   model: string;
   ncbiKeyConfigured: boolean;
   librarySize: number;
+  aiCallsToday?: { used: number; limit: number };
   brainModel: { kind: "schematic-placeholder" | "anatomical-mesh"; attribution?: string };
 }

@@ -25,7 +25,7 @@ export function rebuildAbstract(index: Record<string, number[]> | null | undefin
   return words.filter((w) => w !== undefined).join(" ").replace(/\s+/g, " ").trim();
 }
 
-export function buildOpenAlexFilter(f: SearchFilters = {}): string {
+export function buildOpenAlexFilter(f: SearchFilters = {}, withFields = true): string {
   const types = new Set<string>();
   for (const c of f.categories ?? []) {
     if (c === "review" || c === "systematic-review" || c === "meta-analysis") types.add("review");
@@ -35,7 +35,7 @@ export function buildOpenAlexFilter(f: SearchFilters = {}): string {
   const parts = [
     "has_abstract:true",
     `type:${types.size ? [...types].join("|") : "article|review|preprint"}`,
-    `primary_topic.field.id:${OPENALEX_FIELDS}`,
+    ...(withFields ? [`primary_topic.field.id:${OPENALEX_FIELDS}`] : []),
   ];
   if (f.yearFrom || f.yearTo) parts.push(`publication_year:${f.yearFrom ?? 1800}-${f.yearTo ?? 3000}`);
   return parts.join(",");
@@ -84,7 +84,17 @@ export async function searchOpenAlex(query: string, filters: SearchFilters = {},
   const filter = buildOpenAlexFilter(filters);
   const params = new URLSearchParams({ search, filter, "per-page": String(Math.min(Math.max(limit, 1), 50)) });
   if (config.contactEmail) params.set("mailto", config.contactEmail);
-  const body = await politeFetch(`${BASE}?${params}`, { limiter, ...fetchOpts });
+  let body: string;
+  let usedFilter = filter;
+  try {
+    body = await politeFetch(`${BASE}?${params}`, { limiter, ...fetchOpts });
+  } catch (err) {
+    // If OpenAlex ever rejects the field filter (HTTP 400), retry once without it rather than failing.
+    if (!(err instanceof ExternalApiError) || err.status !== 400) throw err;
+    usedFilter = buildOpenAlexFilter(filters, false);
+    params.set("filter", usedFilter);
+    body = await politeFetch(`${BASE}?${params}`, { limiter, ...fetchOpts });
+  }
   let json: any;
   try {
     json = JSON.parse(body);
@@ -94,5 +104,5 @@ export async function searchOpenAlex(query: string, filters: SearchFilters = {},
   if (!Array.isArray(json?.results)) throw new ExternalApiError("OpenAlex response was missing results");
   const now = new Date().toISOString();
   const records = json.results.map((w: any) => normalizeOpenAlex(w, now)).filter((r: ResearchRecord | null): r is ResearchRecord => !!r);
-  return { records, total: Number(json.meta?.count) || records.length, query: `search="${search}" filter=${filter}` };
+  return { records, total: Number(json.meta?.count) || records.length, query: `search="${search}" filter=${usedFilter}` };
 }

@@ -205,3 +205,17 @@ describe("Multi-source search", () => {
     expect(ans.coverage.find((c) => c.source === "web")?.error).toMatch(/AI engine/);
   });
 });
+
+describe("OpenAlex resilience", () => {
+  it("retries without the field filter if OpenAlex rejects it", async () => {
+    const { searchOpenAlex } = await import("../server/research/sources/openalex.js");
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("bad filter", { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ meta: { count: 1 }, results: [OPENALEX_WORK] })));
+    const res = await searchOpenAlex("video games", {}, 5, { fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(res.records).toHaveLength(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("primary_topic.field.id");
+    expect(String(fetchImpl.mock.calls[1][0])).not.toContain("primary_topic.field.id");
+  });
+});

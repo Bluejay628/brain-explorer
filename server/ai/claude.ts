@@ -9,6 +9,7 @@ import { SOURCE_INFO, type CharacterProfile, type ExtractedIntent, type Populati
 import type { BrainRegion } from "../../shared/regions.js";
 import { personNoun } from "../../shared/lifeStage.js";
 import { ModelAnswerSchema, type ModelAnswer } from "./schema.js";
+import { takeAiCall } from "./budget.js";
 
 export class AiError extends Error {
   constructor(message: string, public readonly userMessage: string) {
@@ -85,6 +86,7 @@ export async function synthesizeAnswer(
   extras: SynthesisExtras = {},
 ): Promise<{ answer: ModelAnswer; model: string }> {
   if (!config.anthropicApiKey) throw new AiError("No API key", "The AI engine is not configured.");
+  if (!takeAiCall()) throw new AiError("Daily cap", "Today's AI answer limit for this website has been reached. Studies are still shown; AI summaries resume tomorrow.");
   client ??= new Anthropic({ apiKey: config.anthropicApiKey, timeout: 120_000, maxRetries: 2 });
 
   // Only the question and public study records are sent — no personal data.

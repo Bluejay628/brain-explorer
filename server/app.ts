@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import compression from "compression";
 import path from "node:path";
 import fs from "node:fs";
 import { z } from "zod";
@@ -9,7 +10,8 @@ import { efetch } from "./research/pubmed.js";
 import { answerQuestion, type EngineDeps } from "./ai/engine.js";
 import { isAiConfigured } from "./ai/claude.js";
 import { lookupBrainMaps } from "./maps/neurovault.js";
-import type { ServerStatus } from "../shared/types.js";
+import type { ResearchAnswer, ServerStatus } from "../shared/types.js";
+import { TtlCache, aiCallsUsedToday } from "./ai/budget.js";
 import { AGE_MAX, AGE_MIN } from "../shared/lifeStage.js";
 
 // ── Input validation: never trust what the browser sends ──
@@ -75,9 +77,24 @@ function rateLimit(maxPerMinute: number) {
 
 export function createApp(deps: Partial<EngineDeps> = {}) {
   const library = deps.library ?? new Library(config.dataDir);
+  const answerCache = new TtlCache<ResearchAnswer>(200);
   const app = express();
   app.disable("x-powered-by");
+  const hops = Number(config.trustProxy);
+  if (Number.isFinite(hops) && hops > 0) app.set("trust proxy", hops);
+  app.use(compression()); // the 2.5 MB brain model shrinks to ~1.2 MB
+  app.use((_req, res, next) => {
+    // Basic browser security headers.
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
   app.use(express.json({ limit: "32kb" }));
+
+  // For hosting services' health checks.
+  app.get("/api/health", (_req, res) => void res.json({ ok: true }));
 
   app.get("/api/status", (_req, res) => {
     // Reports whether keys are configured — never the keys themselves.
@@ -86,6 +103,7 @@ export function createApp(deps: Partial<EngineDeps> = {}) {
       model: config.claudeModel,
       ncbiKeyConfigured: Boolean(config.ncbiApiKey),
       librarySize: library.size,
+      aiCallsToday: { used: aiCallsUsedToday(), limit: config.maxAiCallsPerDay },
       brainModel: { kind: "anatomical-mesh", attribution: "FreeSurfer fsaverage5 + Desikan-Killiany atlas (via nilearn and ggseg)" },
     };
     res.json(status);
@@ -123,17 +141,27 @@ export function createApp(deps: Partial<EngineDeps> = {}) {
   app.post("/api/ask", rateLimit(8), async (req, res) => {
     const parsed = AskSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid question." });
+    // Same question + same settings → reuse the earlier answer (free and instant).
+    const key = JSON.stringify(parsed.data);
+    const cached = answerCache.get(key);
+    if (cached) return void res.json({ ...cached, cached: true });
     const answer = await answerQuestion(parsed.data, { ...deps, library });
+    const allSourcesWorked = answer.coverage.every((c) => !c.error);
+    if (answer.status === "answered" || (answer.status === "insufficient-evidence" && allSourcesWorked)) answerCache.set(key, answer);
     res.json(answer);
   });
 
   app.use("/api", (_req, res) => void res.status(404).json({ error: "Unknown API route." }));
 
-  // In production, serve the built front end from dist/.
-  const dist = path.resolve(config.dataDir, "../dist");
-  if (config.isProduction && fs.existsSync(dist)) {
-    app.use(express.static(dist));
-    app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
+  // In production, serve the built front end from dist/ (created by `npm run build`).
+  if (config.isProduction) {
+    if (fs.existsSync(path.join(config.distDir, "index.html"))) {
+      app.use(express.static(config.distDir, { maxAge: "1h", index: false }));
+      app.get(/^(?!\/api).*/, (_req, res) => res.sendFile(path.join(config.distDir, "index.html")));
+    } else {
+      console.warn("[server] No built website found in dist/. Run `npm run build` first (or use `npm run preview`).");
+      app.get(/^(?!\/api).*/, (_req, res) => void res.status(503).send("Brain Explorer isn't built yet. Run: npm run build"));
+    }
   }
 
   // Last-resort error handler: log briefly, never leak internals or secrets.
