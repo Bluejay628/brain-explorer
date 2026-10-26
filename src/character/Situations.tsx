@@ -1,18 +1,19 @@
-import { DAY, SCENARIOS, type Scenario, type TimelineEvent } from "./scenarios";
+import { dayForAge, scenariosForAge, type Scenario, type TimelineEvent } from "./scenarios";
 
 interface Props {
   onRun: (item: Scenario | TimelineEvent) => void;
   activeSituation?: string;
   busy?: boolean;
   name: string;
+  age: number;
 }
 
-export function SituationGrid({ onRun, activeSituation, busy, name }: Props) {
+export function SituationGrid({ onRun, activeSituation, busy, name, age }: Props) {
   return (
     <div className="stack-sm">
       <p className="small dim">Pick a situation to see what research suggests happens in {name}'s brain.</p>
       <div className="situation-grid">
-        {SCENARIOS.map((s) => (
+        {scenariosForAge(age).map((s) => (
           <button
             key={s.id}
             className="situation"
@@ -30,12 +31,12 @@ export function SituationGrid({ onRun, activeSituation, busy, name }: Props) {
   );
 }
 
-export function DayTimeline({ onRun, activeSituation, busy, name }: Props) {
+export function DayTimeline({ onRun, activeSituation, busy, name, age }: Props) {
   return (
     <div className="stack-sm">
-      <p className="small dim">A typical school day for {name}. Click a moment to see what research says about his brain then.</p>
+      <p className="small dim">A typical day for {name} at age {age}. Click a moment to see what research says about his brain then.</p>
       <ol className="timeline">
-        {DAY.map((e) => (
+        {dayForAge(age).map((e) => (
           <li key={e.time}>
             <button className="timeline-item" aria-pressed={activeSituation === e.situation} disabled={busy} onClick={() => onRun(e)}>
               <span className="mono timeline-time">{e.time}</span>
@@ -48,7 +49,7 @@ export function DayTimeline({ onRun, activeSituation, busy, name }: Props) {
           </li>
         ))}
       </ol>
-      <p className="xs faint">The schedule is an example to explore with, not data about a real student.</p>
+      <p className="xs faint">The schedule is an example to explore with, not data about a real person. It changes with his age.</p>
     </div>
   );
 }

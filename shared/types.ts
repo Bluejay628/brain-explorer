@@ -175,7 +175,7 @@ export interface SearchResponse {
 
 export interface CharacterProfile {
   name: string;
-  /** Age in years (8–25). */
+  /** Age in years (3–90). */
   age: number;
 }
 

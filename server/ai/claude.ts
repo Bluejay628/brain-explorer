@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import { REGIONS } from "../../shared/regions.js";
 import { SOURCE_INFO, type CharacterProfile, type ExtractedIntent, type PopulationMatch, type ResearchRecord, type WebSource } from "../../shared/types.js";
 import type { BrainRegion } from "../../shared/regions.js";
+import { personNoun } from "../../shared/lifeStage.js";
 import { ModelAnswerSchema, type ModelAnswer } from "./schema.js";
 
 export class AiError extends Error {
@@ -90,7 +91,7 @@ export async function synthesizeAnswer(
   const { character, background = [], populationMatch = {}, webSources = [] } = extras;
   const userContent = [
     character
-      ? `<character>Name: ${character.name}. A fictional ${character.age}-year-old boy. Answer about what research suggests happens in a brain like his.</character>`
+      ? `<character>Name: ${character.name}. A fictional ${character.age}-year-old ${personNoun(character.age)}. Answer about what research suggests happens in a brain like his.</character>`
       : "<character>None — answer the question in general terms.</character>",
     `<question>${question}</question>`,
     `<request>Task: ${intent.task}. Hormones asked about: ${intent.includeHormones ? "yes" : "no"}. ${intent.interpretationNotes.join(" ")}</request>`,

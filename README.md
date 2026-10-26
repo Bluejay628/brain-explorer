@@ -15,6 +15,10 @@ Built as a student project for the Congressional App Challenge.
 | **Brain Lab (character)** | Set the character's name and age; pick from 12 situations or 9 moments in his day; ask free questions. Answers are written as short student paragraphs with citations; hormones are covered only when asked. |
 | **Realistic 3D brain** | A real MRI-derived average brain (FreeSurfer fsaverage) with 34 atlas regions per hemisphere and real deep-structure meshes. Rotate, zoom, reset, hide hemispheres, see-through mode, atlas lines and colors, hormone-gland markers. |
 | **Subdivisions** | Add or remove up to 10 subdivisions; each is colored on the brain and listed with its function. |
+| **Click-to-zoom** | Clicking a brain part flies the camera to it and centers it. Inner-surface parts hide the other hemisphere; deep parts switch on see-through mode. |
+| **All ages (3–90)** | The character grows from a boy to an older man. His situations and daily schedule change with life stage, and studies of his age group are searched first. |
+| **Disease changes over time** | Animated, stage-by-stage views of published staging models (Alzheimer's, Parkinson's, Huntington's, ALS, CTE). Asking about one of these starts its animation automatically. |
+| **Compare** | Control (typical brain) vs. condition (a situation or a disease stage), side by side, with cameras that move together. |
 | **AI research answers** | Ask a question → the app retrieves real studies → Claude writes a structured answer → **every citation is checked** against the retrieved studies before you see it. |
 | **Research Library** | Search by topic, title, keyword, author, DOI or PubMed ID; filter by year, study type, population and method. |
 | **Study details** | Full PubMed metadata, abstract, evidence profile, links to PubMed/publisher/free full text, and a NeuroVault brain-map check. |
@@ -39,6 +43,15 @@ It isn't possible to download "all of neuroscience", but the engine gets close i
 2. **Everyday words are translated into research terms** before searching ("all-nighter" → "sleep deprivation", "scary movie" → "fear"). Each ready-made situation also carries an explicit research focus.
 3. **Textbook background:** short overviews of every atlas region are given to the AI as clearly labeled background. The AI may cite them as *Textbook background*, but the validator never lets them count as research findings.
 4. **A bigger starter library:** `npm run seed` also downloads studies for every situation, both for teens and in general.
+
+## Disease staging animations (and their limits)
+
+`shared/diseases.ts` encodes five well-known, published **staging models**: Braak & Braak (1991) for Alzheimer's, Braak et al. (2003) for Parkinson's, Vonsattel et al. (1985) for Huntington's, Brettschneider et al. (2013) for ALS, and McKee et al. (2013) for CTE. They describe **where** disease-related changes usually appear and **in what order**, based on studies of many brains.
+
+- The animation colors regions from pale yellow (earlier or less) to deep red (later or more). These intensities are **illustrative**, not measurements.
+- **Stages are not years.** Timing is described only in words, and real people vary a lot.
+- Each model has a **"Find the original paper"** button that searches the research databases for the real paper, instead of relying on a reference typed by hand.
+- Tests (`tests/diseases.test.ts`) check that every model uses real atlas regions and that no region "gets better" in a later stage.
 
 ## Citations (APA 7 / MLA 9)
 
@@ -172,8 +185,10 @@ To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, 
 
 ## Testing
 
-**Automated** (`npm test`, 78 tests):
+**Automated** (`npm test`, 86 tests):
 - `tests/research.test.ts`: PubMed XML parsing, missing-data handling, sample-size extraction, deduplication, query building, retry/rate-limit handling, malformed responses, search coverage reporting, NeuroVault DOI matching.
+- `tests/diseases.test.ts`: disease models use only real, drawable atlas regions; stages never improve; each model names its source; disease detection in questions.
+- `tests/lifestage.test.ts`: ages 3–90, life stages, age-appropriate situations and days; the character's own description ("a 16-year-old teenage boy") never becomes a hidden age filter.
 - `tests/web.test.ts`: only trusted domains with verbatim excerpts become web sources (look-alike domains rejected); invented web citations removed; web search only runs when studies are thin and can be turned off; still "insufficient evidence" when the web finds nothing reliable.
 - `tests/citations.test.ts`: APA and MLA formatting for single, multiple, group and 21+ authors; missing data (n.d., no authors, no DOI); preprints; web pages; alphabetical bibliographies.
 - `tests/sources.test.ts`: Europe PMC, OpenAlex and Semantic Scholar parsing; preprint labeling; cross-database merging; one source failing doesn't block others; age searches only where supported; user's source choice respected.

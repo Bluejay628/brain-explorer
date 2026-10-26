@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { BrainViewer } from "../components/BrainViewer";
 import { AskBox } from "../components/AskBox";
 import { CharacterCard } from "../character/CharacterCard";
-import { SCENARIOS } from "../character/scenarios";
+import { scenariosForAge } from "../character/scenarios";
 import { useStore } from "../store";
 import { REGION_BY_ID } from "../../shared/regions";
 import { IconArrowRight, IconBookmark, IconBrain, IconClock, IconLibrary, IconShield, IconSpark } from "../icons";
@@ -31,7 +31,7 @@ export function Home() {
           <div className="stack-sm">
             <div className="section-label" style={{ marginBottom: 0 }}>Try a situation</div>
             <div className="situation-grid">
-              {SCENARIOS.slice(0, 6).map((s) => (
+              {scenariosForAge(character.age).slice(0, 6).map((s) => (
                 <button key={s.id} className="situation" onClick={() => navigate(`/explore?s=${s.id}`)}>
                   <span className="situation-title">{s.title}</span>
                 </button>
@@ -42,6 +42,24 @@ export function Home() {
         <div className="hero-brain viewer-frame">
           <BrainViewer compact autoRotate={settings.autoRotate} onSelect={(id) => id && navigate(`/explore?region=${id}`)} caption={`${name}'s brain · average brain model (FreeSurfer fsaverage) · not a real scan`} />
         </div>
+      </section>
+
+      <section className="start-grid" aria-label="Start here">
+        <Link to="/explore" className="start-card panel">
+          <span className="start-num">1</span>
+          <strong>Explore {name}'s brain</strong>
+          <span>Pick a situation or a moment in his day, at any age from 3 to 90.</span>
+        </Link>
+        <Link to="/compare" className="start-card panel">
+          <span className="start-num">2</span>
+          <strong>Compare brains</strong>
+          <span>Control (typical brain) vs. condition, side by side.</span>
+        </Link>
+        <Link to="/explore?d=alzheimers" className="start-card panel">
+          <span className="start-num">3</span>
+          <strong>Watch a disease change</strong>
+          <span>Animate published staging models, like Alzheimer's, stage by stage.</span>
+        </Link>
       </section>
 
       <section className="pillars">

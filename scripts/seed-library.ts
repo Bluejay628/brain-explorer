@@ -11,7 +11,7 @@ import { config } from "../server/config.js";
 import { Library } from "../server/research/library.js";
 import { efetch } from "../server/research/pubmed.js";
 import { DEFAULT_SOURCES, searchSources } from "../server/research/sources/index.js";
-import { DAY, SCENARIOS } from "../src/character/scenarios.js";
+import { DAYS, SCENARIOS } from "../src/character/scenarios.js";
 
 const TOPICS: { query: string; humansOnly?: boolean; ageGroups?: AgeGroup[] }[] = [
   { query: "sleep deprivation working memory", humansOnly: true },
@@ -28,9 +28,21 @@ const TOPICS: { query: string; humansOnly?: boolean; ageGroups?: AgeGroup[] }[] 
   { query: "language Broca area fMRI", humansOnly: true },
 ];
 
-// Every character situation, searched for teens (the default character age) and in general.
-for (const s of [...SCENARIOS, ...DAY]) {
-  TOPICS.push({ query: s.focus, ageGroups: ["adolescent"] }, { query: s.focus });
+// Every character situation and daily moment, searched in general and for the life stages it fits.
+const STAGE_GROUPS: Record<string, AgeGroup> = { child: "child", teen: "adolescent", adult: "adult", "older-adult": "older-adult" };
+const seen = new Set<string>();
+for (const s of SCENARIOS) {
+  for (const stage of s.stages ?? ["child", "teen", "adult", "older-adult"]) {
+    const key = `${s.focus}|${stage}`;
+    if (!seen.has(key)) TOPICS.push({ query: s.focus, ageGroups: [STAGE_GROUPS[stage]] }), seen.add(key);
+  }
+  TOPICS.push({ query: s.focus });
+}
+for (const [stage, events] of Object.entries(DAYS)) {
+  for (const e of events) {
+    const key = `${e.focus}|${stage}`;
+    if (!seen.has(key)) TOPICS.push({ query: e.focus, ageGroups: [STAGE_GROUPS[stage]] }), seen.add(key);
+  }
 }
 
 const EXTRA_PMIDS: string[] = [];

@@ -19,7 +19,7 @@ interface IntentContext {
 }
 
 // Words that describe the character rather than the topic ("a 16-year-old boy who …").
-const CHARACTER_WORDS = /\b(\d{1,2}[- ]year[- ]olds?|boys?|his|he|him|himself|brain|brains|happens?|happening|inside|when|who|while|gets|got|feels?|felt|includ\w*|involved|takes?|took|plays?|playing|uses?|using|drinks?|wins?|practices?|spends?|has|have|pay|paying|laughing|several|hours?|\d+-minute|minutes?|important|big|early)\b/gi;
+const CHARACTER_WORDS = /\b(\d{1,2}[- ]year[- ]olds?|boys?|man|men|teenage|older|his|he|him|himself|brain|brains|happens?|happening|inside|when|who|while|gets|got|feels?|felt|includ\w*|involved|takes?|took|plays?|playing|uses?|using|drinks?|wins?|practices?|spends?|has|have|pay|paying|laughing|several|hours?|\d+-minute|minutes?|important|big|early)\b/gi;
 
 const AGE_RULES: [AgeGroup, RegExp, string][] = [
   ["child", /\b(child|children|childhood|kids?|pediatric|paediatric)\b/i, "children"],
@@ -64,9 +64,11 @@ export function extractIntent(question: string, ctx: IntentContext = {}): Extrac
 
   // ── Age groups (only if stated) ──
   const ages: AgeGroup[] = [];
-  const stripped = q.replace(/\b(older|young) adults?\b/gi, (m) => m.replace(/adults?/i, "_")); // so "older adults" ≠ "adults"
+  // The character's own description ("a 16-year-old teenage boy") is not an age filter request.
+  const qNoCharacter = ctx.character ? q.replace(/\(?\ba \d{1,2}-year-old [a-z ]*?(boy|man)\)?/gi, " ") : q;
+  const stripped = qNoCharacter.replace(/\b(older|young) adults?\b/gi, (m) => m.replace(/adults?/i, "_")); // so "older adults" ≠ "adults"
   for (const [group, re, label] of AGE_RULES) {
-    const target = group === "adult" ? stripped : q;
+    const target = group === "adult" ? stripped : qNoCharacter;
     if (re.test(target)) {
       ages.push(group);
       notes.push(`You mentioned ${label}, so results are limited to studies PubMed indexes with that age group.`);

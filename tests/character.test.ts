@@ -61,7 +61,9 @@ describe("Character intent", () => {
   });
 
   it("maps ages to PubMed age groups", () => {
-    expect([8, 12, 13, 16, 18, 19, 25].map(ageGroupForAge)).toEqual(["child", "child", "adolescent", "adolescent", "adolescent", "young-adult", "young-adult"]);
+    expect([3, 12, 13, 16, 18, 19, 24, 30, 50, 70, 90].map(ageGroupForAge)).toEqual([
+      "child", "child", "adolescent", "adolescent", "adolescent", "young-adult", "young-adult", "adult", "middle-aged", "older-adult", "older-adult",
+    ]);
     expect(toScientificTopic("gaming late scrolling phone")).toBe("video games late screen time screen time");
   });
 });

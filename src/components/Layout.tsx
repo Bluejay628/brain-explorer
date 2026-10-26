@@ -1,10 +1,11 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { IconBookmark, IconBrain, IconHome, IconLibrary, IconSettings } from "../icons";
+import { IconBookmark, IconBrain, IconHome, IconLayers, IconLibrary, IconSettings } from "../icons";
 import { useStore } from "../store";
 
 const NAV = [
   { to: "/", label: "Home", icon: IconHome, end: true },
   { to: "/explore", label: "Brain Lab", icon: IconBrain },
+  { to: "/compare", label: "Compare", icon: IconLayers },
   { to: "/library", label: "Library", icon: IconLibrary },
   { to: "/saved", label: "Saved", icon: IconBookmark },
   { to: "/settings", label: "Settings", icon: IconSettings },

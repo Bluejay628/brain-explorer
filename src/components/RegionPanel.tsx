@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { REGION_BY_ID, childrenOf, type RegionKind } from "../../shared/regions";
 import { useStore } from "../store";
+import { personNoun } from "../../shared/lifeStage";
 import { IconSearch } from "../icons";
 
 const KIND_LABEL: Record<RegionKind, string> = {
@@ -57,7 +58,7 @@ export function RegionPanel({ regionId, onAsk, onSelect }: Props) {
         <div className="section-label">Commonly studied in relation to</div>
         <div className="row wrap" style={{ gap: 6 }}>
           {region.commonlyStudiedIn.map((t) => (
-            <button key={t} className="chip" onClick={() => onAsk(`What evidence connects the ${shortName} to ${t} in ${character.name}'s brain (a ${character.age}-year-old boy)?`)}>{t}</button>
+            <button key={t} className="chip" onClick={() => onAsk(`What evidence connects the ${shortName} to ${t} in ${character.name}'s brain (a ${character.age}-year-old ${personNoun(character.age)})?`)}>{t}</button>
           ))}
         </div>
       </section>
@@ -75,7 +76,7 @@ export function RegionPanel({ regionId, onAsk, onSelect }: Props) {
         <span><strong>Interpret with care.</strong> {region.caution}</span>
       </div>
       <div className="row wrap">
-        <button className="btn primary" onClick={() => onAsk(`What does research show about the ${shortName} in ${character.name}'s brain (a ${character.age}-year-old boy)?`)}>
+        <button className="btn primary" onClick={() => onAsk(`What does research show about the ${shortName} in ${character.name}'s brain (a ${character.age}-year-old ${personNoun(character.age)})?`)}>
           Ask about this region
         </button>
         {canPin && (

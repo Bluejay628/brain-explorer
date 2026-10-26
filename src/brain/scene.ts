@@ -18,8 +18,19 @@ export type Part = "left" | "right" | "cerebellum" | "brainstem" | "deep" | "gla
 export interface BrainSceneOptions {
   onSelect?: (regionId: string | null) => void;
   onHover?: (regionId: string | null, x: number, y: number) => void;
+  /** Fired when the user moves the camera (used to keep two brains in sync). */
+  onCameraChange?: (position: THREE.Vector3, target: THREE.Vector3) => void;
   autoRotate?: boolean;
   interactive?: boolean;
+  /** Fly the camera to a region when it is selected (default true). */
+  focusOnSelect?: boolean;
+}
+
+/** Color ramp for disease-stage overlays: pale yellow → orange → deep red. */
+const RAMP = [new THREE.Color("#f7d774"), new THREE.Color("#f08a3c"), new THREE.Color("#b3123b")];
+function rampColor(t: number, out: THREE.Color): THREE.Color {
+  const x = THREE.MathUtils.clamp(t, 0, 1) * 2;
+  return x <= 1 ? out.copy(RAMP[0]).lerp(RAMP[1], x) : out.copy(RAMP[1]).lerp(RAMP[2], x - 1);
 }
 
 interface ModelFile {
@@ -104,7 +115,17 @@ export class BrainScene {
   private frame = 0;
   private resizeObserver: ResizeObserver;
   private downAt: { x: number; y: number } | null = null;
-  private resetAnim: { from: THREE.Vector3; t: number } | null = null;
+  /** Smooth camera flight (reset or focus on a region). */
+  private camAnim: { fromPos: THREE.Vector3; toPos: THREE.Vector3; fromTarget: THREE.Vector3; toTarget: THREE.Vector3; t: number } | null = null;
+  /** Approximate center of each atlas region / mesh, per side. */
+  private centers = new Map<string, { left?: THREE.Vector3; right?: THREE.Vector3; both?: THREE.Vector3 }>();
+  /** True while the focus view has hidden the right hemisphere (to show an inner-surface region). */
+  private focusHidRight = false;
+  /** True when selecting a deep structure switched see-through mode on (so we can switch it off again). */
+  private autoDeep = false;
+  private overlayTarget = new Map<string, number>();
+  private overlayCurrent = new Map<string, number>();
+  private syncing = false;
   private disposed = false;
   readonly ready: Promise<void>;
 
@@ -171,7 +192,10 @@ export class BrainScene {
       el.addEventListener("pointermove", this.onMove);
       el.addEventListener("pointerleave", this.onLeave);
     }
-    this.controls.addEventListener("start", () => (this.resetAnim = null));
+    this.controls.addEventListener("start", () => (this.camAnim = null));
+    this.controls.addEventListener("change", () => {
+      if (!this.syncing) this.opts.onCameraChange?.(this.camera.position.clone(), this.controls.target.clone());
+    });
     this.loop();
     this.ready = loadModel().then((m) => {
       if (!this.disposed) this.build(m);
@@ -236,17 +260,130 @@ export class BrainScene {
     }
 
     this.scene.add(brain);
+    this.computeCenters();
     this.applyVisibility();
     this.paint();
+    if (this.selected && this.opts.focusOnSelect !== false) this.focus(this.selected);
+  }
+
+  private computeCenters() {
+    const acc = new Map<string, { left: THREE.Vector3; ln: number; right: THREE.Vector3; rn: number }>();
+    const add = (key: string, side: "left" | "right", v: THREE.Vector3) => {
+      const a = acc.get(key) ?? { left: new THREE.Vector3(), ln: 0, right: new THREE.Vector3(), rn: 0 };
+      if (side === "left") (a.left.add(v), a.ln++);
+      else (a.right.add(v), a.rn++);
+      acc.set(key, a);
+    };
+    const v = new THREE.Vector3();
+    for (const h of ["lh", "rh"] as const) {
+      const c = this.cortex[h];
+      if (!c) continue;
+      const pos = c.mesh.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < c.regionKeyOf.length; i++) {
+        const key = c.regionKeyOf[i];
+        if (key) add(key, h === "lh" ? "left" : "right", v.fromBufferAttribute(pos, i));
+      }
+    }
+    for (const m of this.subMeshes) {
+      m.geometry.computeBoundingBox();
+      const center = m.geometry.boundingBox!.getCenter(new THREE.Vector3());
+      const key = m.userData.meshKey as string;
+      if (m.userData.hemi === "both") this.centers.set(key, { both: center });
+      else add(key, m.userData.hemi === "left" ? "left" : "right", center);
+    }
+    for (const [key, a] of acc) {
+      this.centers.set(key, { ...this.centers.get(key), left: a.ln ? a.left.divideScalar(a.ln) : undefined, right: a.rn ? a.right.divideScalar(a.rn) : undefined });
+    }
+  }
+
+  /** Center of a region (left side for paired regions), or null if unknown. */
+  private centerOf(id: string): THREE.Vector3 | null {
+    const r = REGIONS.find((x) => x.id === id);
+    if (r?.marker) return new THREE.Vector3(...r.marker);
+    const pts = meshKeysOf(id)
+      .map((k) => this.centers.get(k))
+      .map((c) => c?.left ?? c?.both ?? c?.right)
+      .filter((p): p is THREE.Vector3 => !!p);
+    if (!pts.length) return null;
+    return pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length);
+  }
+
+  private flyTo(toPos: THREE.Vector3, toTarget: THREE.Vector3) {
+    this.camAnim = { fromPos: this.camera.position.clone(), toPos, fromTarget: this.controls.target.clone(), toTarget, t: 0 };
+  }
+
+  /** Fly the camera to a region and center it on screen. */
+  focus(id: string) {
+    const c = this.centerOf(id);
+    if (!c) return;
+    const r = REGIONS.find((x) => x.id === id);
+    const deep = r && (r.kind === "deep-structure" || r.kind === "marker" || r.parent === "basal-ganglia" || ["hippocampus", "amygdala", "thalamus"].includes(r.id));
+    // Inner-surface (medial) cortex sits near the midline: look from the right side with the right half hidden.
+    const medial = !deep && c.x > -0.28;
+    if (medial && this.visible.right) {
+      this.visible.right = false;
+      this.focusHidRight = true;
+      this.applyVisibility();
+    } else if (!medial && this.focusHidRight) {
+      this.restoreFocusHide();
+    }
+    let dir: THREE.Vector3;
+    if (medial) dir = new THREE.Vector3(1, 0.25, 0);
+    else if (deep) dir = new THREE.Vector3(-1, 0.35, -0.25);
+    else dir = c.clone().setY(c.y * 0.6).normalize();
+    const dist = deep ? 3.0 : 2.7;
+    this.flyTo(c.clone().add(dir.normalize().multiplyScalar(dist)), c.clone());
+  }
+
+  private restoreFocusHide() {
+    if (this.focusHidRight) {
+      this.visible.right = true;
+      this.focusHidRight = false;
+      this.applyVisibility();
+    }
   }
 
   // ───────────────────────────── public API ─────────────────────────────
   setSelected(id: string | null) {
+    const changed = id !== this.selected;
     this.selected = id;
     const r = id ? REGIONS.find((x) => x.id === id) : undefined;
     if (r?.kind === "marker" && !this.visible.glands) this.setVisible("glands", true);
-    if (r && (r.kind === "deep-structure" || r.parent === "basal-ganglia") && !this.visible.deep) this.setVisible("deep", true);
+    const isDeep = !!r && (r.kind === "deep-structure" || r.parent === "basal-ganglia");
+    if (isDeep && !this.visible.deep) {
+      this.setVisible("deep", true);
+      this.autoDeep = true;
+    } else if (!isDeep && this.autoDeep) {
+      this.setVisible("deep", false);
+      this.autoDeep = false;
+    }
     this.paint();
+    if (changed && this.opts.focusOnSelect !== false && this.centers.size) {
+      if (id) this.focus(id);
+      else this.reset();
+    }
+  }
+
+  /**
+   * Color regions by intensity (0–1), e.g. for a disease staging model. Keys may be
+   * region ids or atlas mesh keys. Changes fade smoothly. Pass null to clear.
+   */
+  setOverlay(values: Record<string, number> | null) {
+    this.overlayTarget = new Map();
+    for (const [id, v] of Object.entries(values ?? {})) {
+      const keys = meshKeysOf(id).length ? meshKeysOf(id) : [id];
+      for (const k of keys) this.overlayTarget.set(k, Math.max(v, this.overlayTarget.get(k) ?? 0));
+    }
+  }
+
+  /** Move the camera without notifying listeners (used for syncing two brains). */
+  setCamera(position: THREE.Vector3, target: THREE.Vector3) {
+    this.syncing = true;
+    this.camAnim = null;
+    this.camera.position.copy(position);
+    this.controls.target.copy(target);
+    this.controls.update();
+    this.syncing = false;
   }
   setCited(ids: string[]) {
     this.cited = new Set(ids);
@@ -289,7 +426,8 @@ export class BrainScene {
     this.camera.position.copy(this.controls.target).add(offset.setLength(len));
   }
   reset() {
-    this.resetAnim = { from: this.camera.position.clone(), t: 0 };
+    this.restoreFocusHide();
+    this.flyTo(INITIAL_CAMERA.clone(), new THREE.Vector3(0, 0, 0));
   }
   dispose() {
     this.disposed = true;
@@ -344,9 +482,31 @@ export class BrainScene {
     return { byKey, byId };
   }
 
+  /** Fade overlay intensities toward their targets; repaint only while something changes. */
+  private stepOverlay() {
+    let changed = false;
+    const keys = new Set([...this.overlayTarget.keys(), ...this.overlayCurrent.keys()]);
+    for (const k of keys) {
+      const cur = this.overlayCurrent.get(k) ?? 0;
+      const target = this.overlayTarget.get(k) ?? 0;
+      if (Math.abs(target - cur) < 0.004) {
+        if (cur !== target) {
+          changed = true;
+          if (target === 0) this.overlayCurrent.delete(k);
+          else this.overlayCurrent.set(k, target);
+        }
+        continue;
+      }
+      this.overlayCurrent.set(k, cur + (target - cur) * 0.12);
+      changed = true;
+    }
+    if (changed) this.paint();
+  }
+
   private paint() {
     const pal = PALETTES[this.appearance];
     const tmp = new THREE.Color();
+    const ovColor = new THREE.Color();
     const atlasColors = new Map<string, THREE.Color>();
     const hoverKeys = this.hovered ? meshKeysOf(this.hovered) : [];
     const { byKey, byId } = this.highlightMaps();
@@ -360,7 +520,9 @@ export class BrainScene {
         const depth = THREE.MathUtils.smoothstep(c.sulc[i], -0.6, 0.6);
         tmp.copy(pal.gyrus).lerp(pal.sulcus, depth * 0.85);
         const hl = key ? byKey.get(key) : undefined;
+        const ov = key ? this.overlayCurrent.get(key) ?? 0 : 0;
         if (hl) tmp.lerp(hl, 0.78).multiplyScalar(1 - depth * 0.25);
+        else if (ov > 0.01) tmp.lerp(rampColor(ov, ovColor), 0.3 + 0.6 * ov).multiplyScalar(1 - depth * 0.2);
         else if (this.colorAtlas && key) {
           let ac = atlasColors.get(key);
           if (!ac) {
@@ -380,7 +542,8 @@ export class BrainScene {
       const mat = m.material as THREE.MeshStandardMaterial;
       const base = key === "cerebellum" ? pal.cerebellum : key === "brainstem" ? pal.stem : key === "corpus-callosum" ? pal.callosum : pal.deep;
       const hl = byKey.get(key) ?? byId.get(m.userData.regionId);
-      mat.color.copy(hl ? hl : base);
+      const ov = this.overlayCurrent.get(key) ?? 0;
+      mat.color.copy(hl ? hl : ov > 0.01 ? base.clone().lerp(rampColor(ov, ovColor), 0.3 + 0.6 * ov) : base);
       if (hoverKeys.includes(key)) mat.color.lerp(new THREE.Color("#ffffff"), HOVER_MIX);
       mat.emissive.set(hl ? hl : "#000000").multiplyScalar(hl ? 0.25 : 0);
       const isDeep = key !== "cerebellum" && key !== "brainstem";
@@ -454,12 +617,15 @@ export class BrainScene {
   private loop = () => {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.loop);
-    if (this.resetAnim) {
-      this.resetAnim.t = Math.min(1, this.resetAnim.t + 0.05);
-      const k = 1 - Math.pow(1 - this.resetAnim.t, 3);
-      this.camera.position.lerpVectors(this.resetAnim.from, INITIAL_CAMERA, k);
-      if (this.resetAnim.t >= 1) this.resetAnim = null;
+    if (this.camAnim) {
+      const a = this.camAnim;
+      a.t = Math.min(1, a.t + 0.04);
+      const k = 1 - Math.pow(1 - a.t, 3); // ease-out
+      this.camera.position.lerpVectors(a.fromPos, a.toPos, k);
+      this.controls.target.lerpVectors(a.fromTarget, a.toTarget, k);
+      if (a.t >= 1) this.camAnim = null;
     }
+    this.stepOverlay();
     this.dust.rotation.y += 0.0006;
     this.controls.update();
     this.renderer.render(this.scene, this.camera);

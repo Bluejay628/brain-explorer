@@ -10,6 +10,7 @@ import { answerQuestion, type EngineDeps } from "./ai/engine.js";
 import { isAiConfigured } from "./ai/claude.js";
 import { lookupBrainMaps } from "./maps/neurovault.js";
 import type { ServerStatus } from "../shared/types.js";
+import { AGE_MAX, AGE_MIN } from "../shared/lifeStage.js";
 
 // ── Input validation: never trust what the browser sends ──
 const FiltersSchema = z
@@ -50,7 +51,7 @@ const AskSchema = z.object({
   character: z
     .object({
       name: z.string().trim().min(1).max(24).regex(/^[\p{L}' -]+$/u, "Names can only contain letters."),
-      age: z.number().int().min(8).max(25),
+      age: z.number().int().min(AGE_MIN).max(AGE_MAX),
     })
     .optional(),
 });

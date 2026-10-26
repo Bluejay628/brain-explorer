@@ -1,23 +1,12 @@
 import { useId } from "react";
-import type { AgeGroup } from "../../shared/types";
 import { useStore } from "../store";
+import { AGE_GROUP_LABEL, AGE_MAX, AGE_MIN, ageGroupForAge, personNoun } from "../../shared/lifeStage";
 
-const AGE_GROUP_LABEL: Record<AgeGroup, string> = {
-  child: "Child (PubMed: 6–12)",
-  adolescent: "Teen (PubMed: 13–18)",
-  "young-adult": "Young adult (PubMed: 19–24)",
-  adult: "Adult",
-  "middle-aged": "Middle-aged",
-  "older-adult": "Older adult",
-};
-
-export function ageGroupFor(age: number): AgeGroup {
-  return age <= 12 ? "child" : age <= 18 ? "adolescent" : "young-adult";
-}
-
-/** Minimal line-art bust. Proportions shift with age (bigger head, narrower shoulders when younger). */
+/** Minimal line-art bust. Younger: bigger head, narrower shoulders. Older: hair turns gray. */
 export function CharacterAvatar({ age, size = 120 }: { age: number; size?: number }) {
-  const t = Math.min(1, Math.max(0, (age - 8) / 17));
+  const t = Math.min(1, Math.max(0, (age - 3) / 17)); // growth from 3 to ~20
+  const gray = Math.min(1, Math.max(0, (age - 50) / 30)); // graying from 50 to 80
+  const hairFill = `rgb(${Math.round(29 + gray * 120)}, ${Math.round(42 + gray * 112)}, ${Math.round(68 + gray * 90)})`;
   const head = 34 - t * 4; // head radius
   const shoulders = 52 + t * 30;
   const neck = 10 + t * 6;
@@ -45,7 +34,7 @@ export function CharacterAvatar({ age, size = 120 }: { age: number; size?: numbe
       {/* ears */}
       <path d={`M ${100 - head * 0.86} ${cy} q -7 4 0 14 M ${100 + head * 0.86} ${cy} q 7 4 0 14`} fill="none" stroke="#8fa6cf" strokeWidth="1.6" />
       {/* hair */}
-      <path d={`M ${100 - head * 0.88} ${cy - 2} C ${100 - head} ${cy - head * 1.25}, ${100 + head * 0.7} ${cy - head * 1.45}, ${100 + head * 0.9} ${cy - 6} C ${100 + head * 0.5} ${cy - head * 0.75}, ${100 - head * 0.2} ${cy - head * 0.6}, ${100 - head * 0.88} ${cy - 2} Z`} fill="#1d2a44" stroke="#8fa6cf" strokeWidth="1.4" />
+      <path d={`M ${100 - head * 0.88} ${cy - 2} C ${100 - head} ${cy - head * 1.25}, ${100 + head * 0.7} ${cy - head * 1.45}, ${100 + head * 0.9} ${cy - 6} C ${100 + head * 0.5} ${cy - head * 0.75}, ${100 - head * 0.2} ${cy - head * 0.6}, ${100 - head * 0.88} ${cy - 2} Z`} fill={hairFill} stroke="#8fa6cf" strokeWidth="1.4" />
       {/* brain glyph inside the head */}
       <g transform={`translate(100 ${cy - head * 0.42}) scale(${(head / 34) * 0.62})`} fill="none" stroke="#3fd6ff" strokeWidth="1.4" strokeLinecap="round" opacity="0.95">
         <path d="M0 -14 C -6 -18 -16 -16 -17 -8 C -23 -6 -23 4 -17 6 C -17 13 -8 16 0 12 C 8 16 17 13 17 6 C 23 4 23 -6 17 -8 C 16 -16 6 -18 0 -14 Z" />
@@ -59,10 +48,10 @@ export function CharacterCard({ compact = false }: { compact?: boolean }) {
   const { character, updateCharacter } = useStore();
   const ageId = useId();
   const nameId = useId();
-  const group = ageGroupFor(character.age);
+  const group = ageGroupForAge(character.age);
   return (
     <div className="character-card panel panel-pad">
-      <div className="row" style={{ alignItems: "center", gap: 16 }}>
+      <div className="row character-row" style={{ alignItems: "center", gap: 16 }}>
         <CharacterAvatar age={character.age} size={compact ? 76 : 96} />
         <div className="grow stack-sm">
           <div className="row wrap" style={{ gap: 8 }}>
@@ -75,16 +64,23 @@ export function CharacterCard({ compact = false }: { compact?: boolean }) {
               maxLength={24}
               aria-label="Character name"
             />
-            <span className="chip">{character.age} years old</span>
+            <span className="chip">{character.age} years old · {personNoun(character.age)}</span>
             <span className="chip cyan">{AGE_GROUP_LABEL[group]}</span>
           </div>
           <label htmlFor={ageId} className="field">
-            Age
+            <span className="row wrap" style={{ justifyContent: "space-between", rowGap: 4 }}>
+              <span>Age (drag to change)</span>
+              <span className="row wrap" style={{ gap: 4 }}>
+                {[5, 10, 16, 30, 50, 75].map((a) => (
+                  <button key={a} type="button" className="btn sm ghost age-preset" aria-pressed={character.age === a} onClick={() => updateCharacter({ age: a })}>{a}</button>
+                ))}
+              </span>
+            </span>
             <input
               id={ageId}
               type="range"
-              min={8}
-              max={25}
+              min={AGE_MIN}
+              max={AGE_MAX}
               value={character.age}
               onChange={(e) => updateCharacter({ age: Number(e.target.value) })}
               className="age-slider"

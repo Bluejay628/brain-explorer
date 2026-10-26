@@ -10,6 +10,7 @@ import { Library } from "./pages/Library";
 import { StudyDetail } from "./pages/StudyDetail";
 import { Saved } from "./pages/Saved";
 import { Settings } from "./pages/Settings";
+import { Compare } from "./pages/Compare";
 
 function NotFound() {
   return (
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="explore" element={<Explore />} />
+            <Route path="compare" element={<Compare />} />
             <Route path="library" element={<Library />} />
             <Route path="study/:id" element={<StudyDetail />} />
             <Route path="saved" element={<Saved />} />

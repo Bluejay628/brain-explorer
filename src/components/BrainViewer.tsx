@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { BrainScene, webglAvailable, type Appearance, type Part } from "../brain/scene";
+export type { BrainScene };
 import { REGION_BY_ID, TOP_LEVEL } from "../../shared/regions";
 import { IconLayers, IconPause, IconPlay, IconReset, IconRotateL, IconRotateR, IconZoomIn, IconZoomOut } from "../icons";
 
@@ -12,6 +13,15 @@ interface Props {
   compact?: boolean; // hero mode: fewer controls
   showRegionList?: boolean;
   caption?: string;
+  /** Disease-stage coloring: region id → 0–1. */
+  overlay?: Record<string, number> | null;
+  /** Short label shown over the brain while an overlay is active. */
+  overlayLabel?: string;
+  /** Fly to a region when it is selected (default true). */
+  focusOnSelect?: boolean;
+  /** Gives the parent access to the scene (e.g. to sync two brains). */
+  onSceneReady?: (scene: BrainScene | null) => void;
+  onCameraChange?: (position: import("three").Vector3, target: import("three").Vector3) => void;
 }
 
 const PARTS: { id: Part; label: string }[] = [
@@ -25,12 +35,28 @@ const PARTS: { id: Part; label: string }[] = [
 
 const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-export function BrainViewer({ selected = null, onSelect, cited = [], pinned = [], autoRotate = true, compact = false, showRegionList = false, caption }: Props) {
+export function BrainViewer({
+  selected = null,
+  onSelect,
+  cited = [],
+  pinned = [],
+  autoRotate = true,
+  compact = false,
+  showRegionList = false,
+  caption,
+  overlay = null,
+  overlayLabel,
+  focusOnSelect = true,
+  onSceneReady,
+  onCameraChange,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BrainScene | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onCameraRef = useRef(onCameraChange);
+  onCameraRef.current = onCameraChange;
   const [supported] = useState(() => webglAvailable());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [spinning, setSpinning] = useState(autoRotate && !reducedMotion);
@@ -46,7 +72,9 @@ export function BrainViewer({ selected = null, onSelect, cited = [], pinned = []
     try {
       scene = new BrainScene(hostRef.current, {
         autoRotate: autoRotate && !reducedMotion,
+        focusOnSelect,
         onSelect: (id) => onSelectRef.current?.(id),
+        onCameraChange: (p, t) => onCameraRef.current?.(p, t),
         onHover: (id, x, y) => {
           const tip = tipRef.current;
           if (!tip) return;
@@ -67,8 +95,10 @@ export function BrainViewer({ selected = null, onSelect, cited = [], pinned = []
       return;
     }
     sceneRef.current = scene;
+    onSceneReady?.(scene);
     scene.ready.then(() => setStatus("ready")).catch(() => setStatus("error"));
     return () => {
+      onSceneReady?.(null);
       scene.dispose();
       sceneRef.current = null;
     };
@@ -84,6 +114,10 @@ export function BrainViewer({ selected = null, onSelect, cited = [], pinned = []
   useEffect(() => s()?.setCited(cited), [cited.join(","), status]);
   useEffect(() => s()?.setPinned(pinned), [pinned.join(","), status]);
   useEffect(() => s()?.setAutoRotate(spinning), [spinning]);
+  useEffect(() => s()?.setOverlay(overlay), [JSON.stringify(overlay), status]);
+  useEffect(() => {
+    if (overlay) setSpinning(false);
+  }, [Boolean(overlay)]);
   useEffect(() => s()?.setAppearance(appearance), [appearance, status]);
   useEffect(() => s()?.setBoundaries(lines), [lines, status]);
   useEffect(() => s()?.setColorAtlas(atlasColors), [atlasColors, status]);
@@ -110,6 +144,17 @@ export function BrainViewer({ selected = null, onSelect, cited = [], pinned = []
           </div>
         )}
         <div ref={tipRef} className="tooltip" style={{ display: "none" }} />
+        {overlay && overlayLabel && (
+          <div className="overlay-legend">
+            <div>
+              <span className="row" style={{ gap: 8 }}>
+                <strong>{overlayLabel}</strong>
+                <span className="legend-ramp" style={{ minWidth: 80 }} aria-hidden="true" />
+              </span>
+              <span className="xs faint">Published staging model — where changes typically appear, not a scan or measurement.</span>
+            </div>
+          </div>
+        )}
 
         <div className="hud top">
           <span className="model-label">

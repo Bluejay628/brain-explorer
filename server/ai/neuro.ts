@@ -37,11 +37,7 @@ export function asksAboutHormones(question: string): boolean {
   return HORMONE_RE.test(question);
 }
 
-export function ageGroupForAge(age: number): AgeGroup {
-  if (age <= 12) return "child";
-  if (age <= 18) return "adolescent"; // MeSH "Adolescent" = 13–18
-  return "young-adult"; // MeSH "Young Adult" = 19–24
-}
+export { ageGroupForAge } from "../../shared/lifeStage.js";
 
 const AGE_LABEL: Record<AgeGroup, string> = {
   child: "children",

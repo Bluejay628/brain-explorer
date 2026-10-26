@@ -6,6 +6,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ALL_SOURCES, type CharacterProfile, type ResearchRecord, type SourceId } from "../shared/types";
+import { clampAge } from "../shared/lifeStage";
 
 export interface Settings {
   theme: "lab" | "contrast";
@@ -117,7 +118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateCharacter: (c) =>
         setCharacter((cur) => {
           const next = { ...cur, ...c };
-          next.age = Math.min(25, Math.max(8, Math.round(next.age)));
+          next.age = clampAge(next.age);
           next.name = next.name.replace(/[^\p{L}' -]/gu, "").slice(0, 24);
           return next;
         }),
