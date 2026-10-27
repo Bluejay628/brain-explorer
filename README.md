@@ -10,23 +10,20 @@ Built as a student project for the Congressional App Challenge.
 
 ## What it does
 
-Everything is on **one page**. Tabs across the top: **Explore · Ask · Leo · Diseases · Cells · Compare · Studies**. The 3D brain stays on the left while you switch between the first five; Compare and Studies use the full width. A study opens in a panel that slides over the page, and settings open from the gear icon.
-
 | Feature | What you can do |
 |---|---|
-| **Leo (character)** | Set the character's name and age; pick from 12 situations or 9 moments in his day; ask free questions. Answers are written as short student paragraphs with citations; hormones are covered only when asked. |
-| **Realistic 3D brain** | A real MRI-derived average brain (FreeSurfer fsaverage) with 34 atlas regions per hemisphere and real deep-structure meshes, shown in realistic pink tissue colors with soft studio lighting and outlined parts. A "pick a structure" list, a label line pointing at the selected part, a **Structure isolation** slider that fades everything else, a camera button that saves a PNG, zoom, reset, spin, hide parts, see-through mode, and hormone-gland markers. |
+| **Brain Lab (character)** | Set the character's name and age; pick from 12 situations or 9 moments in his day; ask free questions. Answers are written as short student paragraphs with citations; hormones are covered only when asked. |
+| **Realistic 3D brain** | A real MRI-derived average brain (FreeSurfer fsaverage) with 34 atlas regions per hemisphere and real deep-structure meshes. Rotate, zoom, reset, hide hemispheres, see-through mode, atlas lines and colors, hormone-gland markers. |
 | **Subdivisions** | Add or remove up to 10 subdivisions; each is colored on the brain and listed with its function. |
 | **Click-to-zoom** | Clicking a brain part flies the camera to it and centers it. Inner-surface parts hide the other hemisphere; deep parts switch on see-through mode. |
 | **All ages (3–90)** | The character grows from a boy to an older man. His situations and daily schedule change with life stage, and studies of his age group are searched first. |
 | **Disease changes over time** | Animated, stage-by-stage views of published staging models (Alzheimer's, Parkinson's, Huntington's, ALS, CTE). Asking about one of these starts its animation automatically. |
 | **Compare** | Control (typical brain) vs. condition (a situation or a disease stage), side by side, with cameras that move together. |
 | **AI research answers** | Ask a question → the app retrieves real studies → Claude writes a structured answer → **every citation is checked** against the retrieved studies before you see it. |
-| **Cells (Allen Brain Cell Atlas)** | Real human brain-cell data: 3,369,219 cell nuclei from 4 donors in 31 cell types (Siletti et al., 2023). An interactive cell map (each dot is one real cell), the main cell types and chemical messengers sampled in the selected brain part, and "color the brain by cell type". |
-| **Studies: search** | Search by topic, title, keyword, author, DOI or PubMed ID; filter by year, study type, population and method. |
+| **Research Library** | Search by topic, title, keyword, author, DOI or PubMed ID; filter by year, study type, population and method. |
 | **Study details** | Full PubMed metadata, abstract, evidence profile, links to PubMed/publisher/free full text, and a NeuroVault brain-map check. |
-| **Studies: saved** | Save studies and come back to them (stored in your browser). |
-| **Settings** (gear icon) | Search defaults, citation style, server status, and an explanation of data sources and privacy. |
+| **Saved Studies** | Save studies and come back to them (stored in your browser). |
+| **Settings** | Theme, search defaults, server status, and an explanation of data sources and privacy. |
 
 ## The character, and why it's honest
 
@@ -148,7 +145,6 @@ To try the finished, published version on your own computer: `npm run preview`, 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Server + website with live reload |
-| `python scripts/build-cell-atlas.py` | Rebuild `public/data/cell-atlas.json` from the Allen Brain Cell Atlas (downloads ~830 MB, standard-library Python only) |
 | `npm run seed` | Fill `data/library.json` with real records from all four databases (safe to re-run) |
 | `npm run check` | Plain-language check of your `.env`, API key, each research database, the library and the build (never prints the key) |
 | `npm test` | Run the automated tests |
@@ -200,12 +196,12 @@ The local library (`data/library.json`, git-ignored) holds only records fetched 
 
 ## 3D brain model: sources and licenses
 
-The model (`public/models/brain.json`, about 2.4 MB compressed) is built in two steps: `scripts/build-brain-model.py` makes the deep structures and a first cortex, then `scripts/build-cortex-fsaverage6.py` swaps in the 4× more detailed fsaverage6 cortex (40,962 points per half). Sources:
+The model (`public/models/brain.json`, about 1.2 MB compressed) is built by `scripts/build-brain-model.py` from:
 
 | Part | Source | License / terms |
 |---|---|---|
-| Cortical surface (pial), sulcal depth and curvature | FreeSurfer **fsaverage6**, an average of 40 adult MRI scans (Fischl et al., 1999), from [TemplateFlow](https://www.templateflow.org) (`tpl-fsaverage`, `den-41k` files). The first version used fsaverage5 from the nilearn package; the script checks both line up exactly. | FreeSurfer terms ([license](https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense)). nilearn lists the license as "unknown"; it is widely redistributed with attribution. **Check before commercial use.** |
-| Cortical regions | **Desikan-Killiany atlas** (Desikan et al., 2006, *NeuroImage* 31:968–980) on fsaverage6, from TemplateFlow | ggseg code: MIT. Atlas: FreeSurfer distribution. |
+| Cortical surface (pial) and sulcal depth | FreeSurfer **fsaverage5**, an average of 40 adult MRI scans (Fischl et al., 1999), as redistributed in the [nilearn](https://nilearn.github.io) Python package | FreeSurfer terms ([license](https://surfer.nmr.mgh.harvard.edu/fswiki/FreeSurferSoftwareLicense)). nilearn lists the license as "unknown"; it is widely redistributed with attribution. **Check before commercial use.** |
+| Cortical regions | **Desikan-Killiany atlas** (Desikan et al., 2006, *NeuroImage* 31:968–980) on fsaverage5, via [ggseg.formats](https://github.com/ggsegverse/ggseg.formats) | ggseg code: MIT. Atlas: FreeSurfer distribution. |
 | Deep structures | FreeSurfer **aseg** structures on fsaverage5 (Fischl et al., 2002), via ggseg.formats | As above |
 | Gland markers | Hypothalamus, pituitary and pineal markers at approximate standard-brain positions | Written for this app and labeled "approximate" |
 
@@ -213,23 +209,7 @@ The deep-structure meshes use a different coordinate origin than the surfaces. T
 
 **Important limits:** this is an *average adult* brain. It is not the character's brain, and it shows where regions are, never brain activity. Children's and teens' brains differ in fine detail, such as cortical thickness and the timing of maturation.
 
-To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, download and unzip the nilearn wheel, run `python scripts/build-brain-model.py <ggseg.formats dir> <nilearn fsaverage5 dir>`, then `python scripts/build-cortex-fsaverage6.py`.
-
-**How it is drawn.** The colors are chosen to look like fresh tissue: peach crowns, rosier groove walls, and a thin magenta line where the real curvature data says a groove bottoms out. Faint lavender specks (like small surface blood vessels) and slight color variation are decoration only, not data.
-
-## Brain-cell data: source and limits
-
-The Cells tab uses `public/data/cell-atlas.json` (about 0.7 MB), built by `scripts/build-cell-atlas.py` from the Allen Institute's public **Allen Brain Cell Atlas** bucket, human whole-brain dataset `WHB-10Xv3` with the `WHB-taxonomy` cell-type tree:
-
-> Siletti K, et al. Transcriptomic diversity of cell types across the adult human brain. *Science*. 2023;382(6667):eadd7046. doi:10.1126/science.add7046
-
-Everything shown is **counted directly** from the cell table: how many sampled nuclei of each cell type ("supercluster") and neurotransmitter label came from each tissue sample ("dissection"), plus a fixed 1-in-40 subset of the cells' published cell-map (UMAP) positions. Important limits, also shown in the app:
-
-- Counts are of **sampled** nuclei from 4 adult donors (ages 29–60). The study chose how much tissue to take from each area, so these are **not cell densities**.
-- The study's tissue samples use a different atlas than the 3D model. `shared/cellAtlas.ts` links them **by anatomical name** and only where a sample clearly comes from inside a part. Parts without a clear match show "no cell data" instead of a guess. Tests check that every link points at a real part and a real sample.
-- A dot's position on the cell map shows gene-activity similarity, not where the cell is in the brain.
-- The ABC Atlas also has mouse data (MERFISH brain sections). It is not used here because the 3D model is a human brain.
-- Use of the data is subject to the [Allen Institute terms of use](https://alleninstitute.org/terms-of-use/). **Check them before publishing** (credit the Allen Institute and cite Siletti et al., 2023).
+To rebuild the model: `pip install rdata nibabel numpy`, clone `ggseg.formats`, download and unzip the nilearn wheel, then run `python scripts/build-brain-model.py <ggseg.formats dir> <nilearn fsaverage5 dir>`.
 
 ## Testing
 
@@ -246,22 +226,20 @@ Everything shown is **counted directly** from the cell table: how many sampled n
 The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMIDs are in the unused 90,000,000+ range). They are never loaded by the app.
 
 **Manual checklist:**
-- [ ] The page loads on the Explore tab; the brain spins slowly; each top tab opens its panel and the brain stays in place.
-- [ ] Pick a structure from the list → it turns blue, a label line points at it, and the isolation slider fades the rest; the camera button downloads a PNG.
-- [ ] Cells tab: with the hippocampus selected, the bars show its cell types; clicking a cell type colors the brain; parts with no sample say so.
-- [ ] Leo tab: change the name and age, pick a situation, open the Day tab, tick "Also explain hormones" and confirm a hormone section appears only then.
+- [ ] Home loads; the brain rotates; suggested questions navigate to Explore.
+- [ ] Brain Lab: change the name and age, pick a situation, open the Day tab, tick "Also explain hormones" and confirm a hormone section appears only then.
 - [ ] Subdivisions tab: add 3 subdivisions → each gets its own color on the brain; Remove works.
 - [ ] Layers: hide the right hemisphere → the left hemisphere's inner surface shows; "Deep structures" shows the hippocampus and others inside.
-- [ ] Zoom in/out, reset and spin buttons work; drag and scroll/pinch work; clicking the brain selects a region; the structure list works with the keyboard.
+- [ ] Brain Lab: rotate left/right, zoom in/out, reset, and auto-rotate buttons work; drag and scroll/pinch work; clicking the brain selects a region; region buttons work with the keyboard (Tab + Enter).
 - [ ] "Deep structures" shows the inner structures; selecting the hippocampus turns it on automatically.
 - [ ] Ask "How does sleep restriction affect working memory?" → answer with numbered citations; clicking a number scrolls to the study.
 - [ ] Ask something unanswerable (e.g. "Does quantum entanglement explain consciousness?") → "Insufficient evidence".
 - [ ] Without `ANTHROPIC_API_KEY`: answer shows "Retrieval-only mode" plus studies.
-- [ ] Studies tab: search by topic, author surname, a DOI and a PMID; apply each filter; turn PubMed on/off.
+- [ ] Library: search by topic, author surname, a DOI and a PMID; apply each filter; turn PubMed on/off.
 - [ ] Study page: PubMed link opens the right paper; "Not reported" appears for missing fields; Check NeuroVault works.
-- [ ] Save a study → appears under Studies → Saved → still there after reload → Unsave removes it.
-- [ ] Settings (gear icon): server status shows correct key status.
-- [ ] Phone width (or browser dev-tools device mode): tabs scroll sideways at the top, no sideways page scrolling, brain still usable with touch.
+- [ ] Save a study → appears in Saved and on Home → still there after reload → Unsave removes it.
+- [ ] Settings: switch to high-contrast theme; server status shows correct key status.
+- [ ] Phone width (or browser dev-tools device mode): bottom navigation, no sideways scrolling, brain still usable with touch.
 - [ ] View page source / network tab: no API key anywhere.
 
 ## Known limitations
@@ -289,6 +267,5 @@ The test fixtures are **synthetic** (titles start with `[TEST FIXTURE]`, and PMI
 - Code: © the Brain Explorer authors. Choose a license (e.g. MIT) before publishing the repository.
 - Study metadata and abstracts: from PubMed / NLM, with copyright held by the respective publishers. Every record links to its source.
 - Fonts: Inter and JetBrains Mono (SIL Open Font License) via Google Fonts.
-- Brain-cell data: Allen Brain Cell Atlas (Allen Institute), human whole-brain dataset; Siletti et al., *Science* 2023. See "Brain-cell data: source and limits".
-- 3D model: FreeSurfer fsaverage6 + Desikan-Killiany atlas (via TemplateFlow) and aseg (via ggseg.formats, MIT). See "3D brain model: sources and licenses".
+- 3D model: FreeSurfer fsaverage5 + Desikan-Killiany atlas + aseg, via nilearn (BSD-3) and ggseg.formats (MIT). See "3D brain model: sources and licenses".
 - Libraries: React, Three.js, Express, Zod, fast-xml-parser, Anthropic SDK (see `package.json`; all open-source).
