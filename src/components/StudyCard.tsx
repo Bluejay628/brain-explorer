@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ResearchRecord } from "../../shared/types";
 import { useStore } from "../store";
+import { useNav } from "../nav";
 import { EvidenceChips, formatAuthors, sourceLinkLabel } from "./Evidence";
 import { CiteButton } from "./Cite";
 import { IconBookmark, IconBookmarkFilled, IconExternal } from "../icons";
@@ -22,6 +23,7 @@ export function SaveButton({ record, small = false }: { record: ResearchRecord; 
 }
 
 export function StudyCard({ record, index, highlight }: { record: ResearchRecord; index?: number; highlight?: boolean }) {
+  const { studyLink } = useNav();
   const preview = record.abstract.map((s) => s.text).join(" ");
   return (
     <article className={`panel study-card fade-in${highlight ? " highlight" : ""}`} id={`study-${record.id}`}>
@@ -29,7 +31,7 @@ export function StudyCard({ record, index, highlight }: { record: ResearchRecord
         {index !== undefined && <span className="study-index" style={{ marginTop: 3 }}>[{index}]</span>}
         <div className="grow">
           <h3>
-            <Link to={`/study/${encodeURIComponent(record.id)}`}>{record.title}</Link>
+            <Link to={studyLink(record.id)}>{record.title}</Link>
           </h3>
           <div className="meta">
             {formatAuthors(record)} · <em>{record.journal ?? "Journal not listed"}</em> · {record.publicationDate ?? "Date not reported"}

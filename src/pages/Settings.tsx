@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { ALL_SOURCES, SOURCE_INFO, type ServerStatus } from "../../shared/types";
 import { api } from "../api";
 import { useStore } from "../store";
-import { IconShield } from "../icons";
+import { IconShield, IconX } from "../icons";
 
-export function Settings() {
+export function Settings({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings, clearAll, saved, history } = useStore();
   const [status, setStatus] = useState<ServerStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -20,18 +20,12 @@ export function Settings() {
           <div className="eyebrow">Settings</div>
           <h1>Preferences, data sources &amp; privacy</h1>
         </div>
+        <button className="btn icon" onClick={onClose} aria-label="Close settings" title="Close"><IconX size={17} /></button>
       </header>
 
       <div className="settings-grid">
         <section className="panel panel-pad stack">
           <div className="panel-title"><span className="dot" /> Display</div>
-          <label className="field">
-            Theme
-            <select className="select" value={settings.theme} onChange={(e) => updateSettings({ theme: e.target.value as "lab" | "contrast" })}>
-              <option value="lab">Lab (dark)</option>
-              <option value="contrast">High contrast</option>
-            </select>
-          </label>
           <label className="check">
             <input type="checkbox" checked={settings.autoRotate} onChange={(e) => updateSettings({ autoRotate: e.target.checked })} />
             Slowly rotate the brain when idle (always off if your device asks for reduced motion)
@@ -104,7 +98,9 @@ export function Settings() {
               <dt>Local library</dt>
               <dd>{status.librarySize.toLocaleString()} research records cached</dd>
               <dt>3D model</dt>
-              <dd>Average adult brain (FreeSurfer fsaverage5) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
+              <dd>Average adult brain (FreeSurfer fsaverage6) with the Desikan-Killiany atlas and FreeSurfer subcortical structures</dd>
+              <dt>Cell data</dt>
+              <dd>Allen Brain Cell Atlas, human whole-brain dataset (Siletti et al., 2023), stored with the app</dd>
             </dl>
           )}
           {status && !status.aiConfigured && (
@@ -125,6 +121,7 @@ export function Settings() {
           <div className="settings-grid">
             <div className="stack-sm small dim">
               <p><strong className="dim">Research databases.</strong> Study metadata and abstracts come from the official free APIs of PubMed (U.S. National Library of Medicine), Europe PMC (EMBL-EBI), OpenAlex and Semantic Scholar (Allen Institute for AI), within their rate limits. Your search terms are sent to the databases you turn on. Abstracts may be copyrighted by their publishers; each record links to its source. Preprints are labeled because they have not been peer reviewed.</p>
+              <p><strong className="dim">Allen Brain Cell Atlas.</strong> The Cells tab uses cell counts and a cell map built from the Allen Institute's public human whole-brain dataset (Siletti et al., Science 2023). The data are stored with the app; nothing you do there is sent anywhere.</p>
               <p><strong className="dim">NeuroVault.</strong> When you check for brain maps, the study's DOI is sent to NeuroVault to look for maps the authors published. Brain Explorer never creates its own maps.</p>
               <p><strong className="dim">Claude API (Anthropic).</strong> When AI answers are enabled, your question and the retrieved public study abstracts are sent from the server to Anthropic to write the summary. No account, name or other personal data is sent.</p>
             </div>
