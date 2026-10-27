@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNav } from "../nav";
+import { Link } from "react-router-dom";
 import { DISEASES, DISEASE_BY_ID, type DiseaseModel } from "../../shared/diseases";
 import { IconPause, IconPlay } from "../icons";
 
@@ -21,7 +21,6 @@ interface TimelineProps {
 /** Stage slider + play button. While playing, advances one stage every ~1.8 s and stops at the end. */
 export function DiseaseTimeline({ disease, stage, onStage, playing, onPlaying, onAsk, compact = false }: TimelineProps) {
   const last = disease.stages.length - 1;
-  const { searchStudies } = useNav();
   useEffect(() => {
     if (!playing) return;
     if (stage >= last) {
@@ -85,7 +84,7 @@ export function DiseaseTimeline({ disease, stage, onStage, playing, onPlaying, o
           <p className="xs dim"><strong>Time:</strong> {disease.timeCourse} <strong>Who:</strong> {disease.whoItAffects}</p>
           <div className="notice amber xs"><span>{disease.caution}</span></div>
           <div className="row wrap">
-            <button className="btn sm" onClick={() => searchStudies(disease.sourceQuery)}>Find the original paper · {disease.sourceLabel}</button>
+            <Link className="btn sm" to={`/library?q=${encodeURIComponent(disease.sourceQuery)}`}>Find the original paper · {disease.sourceLabel}</Link>
             {onAsk && <button className="btn sm ghost" onClick={() => onAsk(disease.question)}>Ask what research says</button>}
           </div>
         </>

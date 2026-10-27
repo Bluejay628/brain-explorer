@@ -1,4 +1,4 @@
-import { useNav } from "../nav";
+import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { StudyCard } from "../components/StudyCard";
 import { Bibliography } from "../components/Cite";
@@ -6,7 +6,6 @@ import { IconBookmark } from "../icons";
 
 export function Saved() {
   const { saved } = useStore();
-  const { update } = useNav();
 
   const exportJson = () => {
     const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
@@ -33,7 +32,7 @@ export function Saved() {
           <IconBookmark size={30} />
           <p>No saved studies yet.</p>
           <p className="small faint" style={{ marginTop: 4 }}>Use the Save button on any study.</p>
-          <button className="btn primary" onClick={() => update({ view: null })} style={{ marginTop: 14 }}>Search for studies</button>
+          <Link className="btn primary" to="/library" style={{ marginTop: 14 }}>Browse the library</Link>
         </div>
       ) : (
         <div className="stack">

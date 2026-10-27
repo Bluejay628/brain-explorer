@@ -9,6 +9,7 @@ import { ALL_SOURCES, type CharacterProfile, type ResearchRecord, type SourceId 
 import { clampAge } from "../shared/lifeStage";
 
 export interface Settings {
+  theme: "lab" | "contrast";
   includePubMedByDefault: boolean;
   humansOnlyByDefault: boolean;
   autoRotate: boolean;
@@ -32,7 +33,7 @@ export interface HistoryItem {
   at: string;
 }
 
-const DEFAULT_SETTINGS: Settings = { includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true, sources: ALL_SOURCES, webSearch: true, citationStyle: "apa" };
+const DEFAULT_SETTINGS: Settings = { theme: "lab", includePubMedByDefault: true, humansOnlyByDefault: false, autoRotate: true, sources: ALL_SOURCES, webSearch: true, citationStyle: "apa" };
 const DEFAULT_CHARACTER: CharacterState = { name: "Leo", age: 16, includeHormones: false };
 
 function read<T>(key: string, fallback: T): T {
@@ -91,6 +92,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => write("be.history", history), [history]);
   useEffect(() => write("be.character", character), [character]);
   useEffect(() => write("be.pinned", pinned), [pinned]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme;
+  }, [settings.theme]);
 
   const toggleSaved = useCallback((r: ResearchRecord) => {
     setSaved((cur) => (cur.some((s) => s.id === r.id) ? cur.filter((s) => s.id !== r.id) : [{ ...r }, ...cur]));

@@ -10,9 +10,9 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { REGIONS, meshKeysOf, regionForMeshKey } from "../../shared/regions";
 
+export type Appearance = "tissue" | "lab";
 export type Part = "left" | "right" | "cerebellum" | "brainstem" | "deep" | "glands";
 
 export interface BrainSceneOptions {
@@ -36,7 +36,7 @@ function rampColor(t: number, out: THREE.Color): THREE.Color {
 interface ModelFile {
   quantization: number;
   regions: { key: string; display: string; lobe: string }[];
-  cortex: Record<"lh" | "rh", { positions: string; indices: string; sulc: string; curv?: string; labels: string; vertexCount: number }>;
+  cortex: Record<"lh" | "rh", { positions: string; indices: string; sulc: string; labels: string; vertexCount: number }>;
   subcortical: { key: string; hemi: string; positions: string; indices: string }[];
 }
 
@@ -57,23 +57,29 @@ export function loadModel(): Promise<ModelFile> {
   return modelPromise;
 }
 
-// Realistic tissue colors (fresh brain tissue is pink-beige; grooves look deeper pink).
-// Like a photo of a fresh brain: peach crowns, rosier groove walls, and a thin
-// deep-magenta line along the bottom of each groove.
-const PAL = {
-  gyrus: new THREE.Color("#f1b896"),
-  sulcus: new THREE.Color("#d97f7c"),
-  groove: new THREE.Color("#9c1850"),
-  vessel: new THREE.Color("#b49ac8"),
-  deep: new THREE.Color("#eaa996"),
-  cerebellum: new THREE.Color("#eeb39a"),
-  stem: new THREE.Color("#f0c2aa"),
-  callosum: new THREE.Color("#f8efe8"),
-  boundary: new THREE.Color("#9c4a5e"),
+const PALETTES = {
+  tissue: {
+    gyrus: new THREE.Color("#e6b8a8"),
+    sulcus: new THREE.Color("#8c5a55"),
+    deep: new THREE.Color("#c99a8e"),
+    cerebellum: new THREE.Color("#d4a294"),
+    stem: new THREE.Color("#d8b3a2"),
+    callosum: new THREE.Color("#efe6da"),
+    boundary: new THREE.Color("#5b3836"),
+  },
+  lab: {
+    gyrus: new THREE.Color("#8ea4cc"),
+    sulcus: new THREE.Color("#2d3a58"),
+    deep: new THREE.Color("#4f86b8"),
+    cerebellum: new THREE.Color("#7f95c0"),
+    stem: new THREE.Color("#7d8fb5"),
+    callosum: new THREE.Color("#b9c8e6"),
+    boundary: new THREE.Color("#1a2238"),
+  },
 };
-const SELECT = new THREE.Color("#2f6fe4");
+const SELECT = new THREE.Color("#3fd6ff");
 const HOVER_MIX = 0.35;
-const CITED = new THREE.Color("#7c4ddb");
+const CITED = new THREE.Color("#8b7bff");
 /** Distinct colors for "added" subdivisions (ordered for contrast). */
 export const PIN_COLORS = ["#f59e0b", "#22c55e", "#ec4899", "#14b8a6", "#eab308", "#ef4444", "#a855f7", "#84cc16", "#06b6d4", "#f97316"];
 
@@ -84,11 +90,6 @@ interface CortexMesh {
   regionKeyOf: (string | null)[]; // per vertex
   sulc: Float32Array; // -1..1 (positive = deep sulcus)
   boundary: Uint8Array; // 1 if vertex is on an atlas boundary
-  mottle: Float32Array; // -1..1 decorative color variation
-  /** 0..1: how strongly this point sits in the bottom of a groove (from real curvature). */
-  groove: Float32Array;
-  /** 0..1 faint lavender specks, like small surface blood vessels (decoration, not data). */
-  vessel: Float32Array;
 }
 
 export class BrainScene {
@@ -99,16 +100,16 @@ export class BrainScene {
   private raycaster = new THREE.Raycaster();
   private pointer = new THREE.Vector2();
   private cortex: { lh?: CortexMesh; rh?: CortexMesh } = {};
-  private cortexMaterial: THREE.MeshPhysicalMaterial;
+  private cortexMaterial: THREE.MeshStandardMaterial;
   private subMeshes: THREE.Mesh[] = [];
   private markers: THREE.Mesh[] = [];
+  private dust: THREE.Points;
   private selected: string | null = null;
   private hovered: string | null = null;
   private cited = new Set<string>();
   private pinned: string[] = [];
+  private appearance: Appearance = "tissue";
   private showBoundaries = false;
-  /** 0 = whole brain solid, 1 = everything except the selected part almost invisible. */
-  private isolation = 0;
   private colorAtlas = false;
   private visible: Record<Part, boolean> = { left: true, right: true, cerebellum: true, brainstem: true, deep: false, glands: false };
   private frame = 0;
@@ -122,8 +123,6 @@ export class BrainScene {
   private focusHidRight = false;
   /** True when selecting a deep structure switched see-through mode on (so we can switch it off again). */
   private autoDeep = false;
-  /** True when a color overlay switched see-through mode on. */
-  private overlayDeep = false;
   private overlayTarget = new Map<string, number>();
   private overlayCurrent = new Map<string, number>();
   private syncing = false;
@@ -135,7 +134,7 @@ export class BrainScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
     this.renderer.domElement.setAttribute("aria-hidden", "true");
 
@@ -154,30 +153,33 @@ export class BrainScene {
     this.controls.enableZoom = opts.interactive !== false;
     this.controls.target.set(0, 0, 0);
 
-    // Soft photo-studio lighting: a room reflection map for soft highlights, a warm key light and a gentle fill.
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.3;
-    pmrem.dispose();
-    this.scene.add(new THREE.HemisphereLight("#fff8f2", "#b08a84", 0.7));
-    const key = new THREE.DirectionalLight("#fff1e8", 1.7);
+    // Soft studio lighting: warm key, cool fill, cyan rim.
+    this.scene.add(new THREE.HemisphereLight("#f2f5ff", "#1a1420", 1.1));
+    const key = new THREE.DirectionalLight("#fff4ea", 2.1);
     key.position.set(-3, 4, -2);
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight("#ffe4e4", 0.6);
+    const fill = new THREE.DirectionalLight("#b8c8ff", 0.7);
     fill.position.set(3, 1, 2);
     this.scene.add(fill);
+    const rim = new THREE.DirectionalLight("#3fd6ff", 0.9);
+    rim.position.set(1, 2, 4);
+    this.scene.add(rim);
+    this.scene.add(new THREE.AmbientLight("#ffffff", 0.15));
 
-    // Slightly moist, soft tissue: low shine with a velvety sheen at the edges.
-    this.cortexMaterial = new THREE.MeshPhysicalMaterial({
-      vertexColors: true,
-      roughness: 0.55,
-      metalness: 0,
-      clearcoat: 0.25,
-      clearcoatRoughness: 0.45,
-      sheen: 0.6,
-      sheenRoughness: 0.6,
-      sheenColor: new THREE.Color("#ffd9d2"),
-    });
+    this.cortexMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.0 });
+
+    // Decorative particle field (not data).
+    const dustGeo = new THREE.BufferGeometry();
+    const pts = new Float32Array(600 * 3);
+    for (let i = 0; i < 600; i++) {
+      const r = 1.8 + Math.random() * 1.6;
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      pts.set([r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph) * 0.7, r * Math.sin(ph) * Math.sin(th)], i * 3);
+    }
+    dustGeo.setAttribute("position", new THREE.BufferAttribute(pts, 3));
+    this.dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: "#3fd6ff", size: 0.011, transparent: true, opacity: 0.4, depthWrite: false }));
+    this.scene.add(this.dust);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
@@ -216,21 +218,9 @@ export class BrainScene {
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
       geo.setIndex(new THREE.BufferAttribute(idx, 1));
       geo.computeVertexNormals();
-      geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(c.vertexCount * 4), 4));
+      geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(c.vertexCount * 3), 3));
       const regionKeyOf = Array.from(labels, (l) => (l === 255 ? null : model.regions[l].key));
       const sulc = Float32Array.from(sulcRaw, (s) => s / 127);
-      // Gentle, fixed color variation so the surface looks like tissue rather than plastic (decoration, not data).
-      const mottle = new Float32Array(c.vertexCount);
-      for (let i = 0; i < c.vertexCount; i++) mottle[i] = tissueNoise(pos[i * 3] * 9, pos[i * 3 + 1] * 9, pos[i * 3 + 2] * 9);
-      // Groove lines: points that are both deep (sulc) and sharply bent inward (curvature).
-      const curv = c.curv ? Float32Array.from(new Int8Array(decode(c.curv)), (v) => v / 127) : sulc;
-      const groove = new Float32Array(c.vertexCount);
-      const vessel = new Float32Array(c.vertexCount);
-      for (let i = 0; i < c.vertexCount; i++) {
-        groove[i] = THREE.MathUtils.smoothstep(curv[i], 0.18, 0.6) * THREE.MathUtils.smoothstep(sulc[i], 0.0, 0.35);
-        const n = tissueNoise(pos[i * 3] * 38 + 7, pos[i * 3 + 1] * 38, pos[i * 3 + 2] * 38 - 3);
-        vessel[i] = THREE.MathUtils.smoothstep(n, 0.55, 0.9) * (1 - THREE.MathUtils.smoothstep(sulc[i], 0, 0.5));
-      }
       // Atlas boundaries: vertices with a neighbor in a different region.
       const boundary = new Uint8Array(c.vertexCount);
       for (let t = 0; t < idx.length; t += 3) {
@@ -240,7 +230,7 @@ export class BrainScene {
       const mesh = new THREE.Mesh(geo, this.cortexMaterial);
       mesh.userData.hemi = h;
       brain.add(mesh);
-      this.cortex[h] = { mesh, regionKeyOf, sulc, boundary, mottle, groove, vessel };
+      this.cortex[h] = { mesh, regionKeyOf, sulc, boundary };
     }
 
     for (const s of model.subcortical) {
@@ -251,7 +241,7 @@ export class BrainScene {
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
       geo.setIndex(new THREE.BufferAttribute(new Uint32Array(decode(s.indices)), 1));
       geo.computeVertexNormals();
-      const mat = new THREE.MeshPhysicalMaterial({ roughness: 0.55, metalness: 0, transparent: true, clearcoat: 0.2, clearcoatRoughness: 0.5, sheen: 0.5, sheenColor: new THREE.Color("#ffd9d2") });
+      const mat = new THREE.MeshStandardMaterial({ roughness: 0.65, metalness: 0, transparent: true });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.userData = { meshKey: s.key, hemi: s.hemi, regionId: regionForMeshKey(s.key)?.id };
       brain.add(mesh);
@@ -367,7 +357,7 @@ export class BrainScene {
       this.setVisible("deep", false);
       this.autoDeep = false;
     }
-    this.applyVisibility(); // also repaints; transparency depends on what is selected
+    this.paint();
     if (changed && this.opts.focusOnSelect !== false && this.centers.size) {
       if (id) this.focus(id);
       else this.reset();
@@ -384,31 +374,6 @@ export class BrainScene {
       const keys = meshKeysOf(id).length ? meshKeysOf(id) : [id];
       for (const k of keys) this.overlayTarget.set(k, Math.max(v, this.overlayTarget.get(k) ?? 0));
     }
-    // Colored deep structures (e.g. the hippocampus) are hidden inside the cortex: turn on see-through mode for them.
-    const deepColored = this.subMeshes.some((m) => {
-      const k = m.userData.meshKey as string;
-      return k !== "cerebellum" && k !== "brainstem" && this.overlayTarget.has(k);
-    });
-    if (deepColored && !this.visible.deep) {
-      this.overlayDeep = true;
-      this.setVisible("deep", true);
-    } else if (!deepColored && this.overlayDeep) {
-      this.overlayDeep = false;
-      if (!this.autoDeep) this.setVisible("deep", false);
-    }
-  }
-
-  /** Turn the camera so the colored overlay regions face the viewer (e.g. from below for the inner temporal lobe). */
-  showOverlay() {
-    let sum = new THREE.Vector3(), weight = 0;
-    for (const [k, v] of this.overlayTarget) {
-      const c = this.centers.get(k);
-      const p = c?.left ?? c?.both ?? c?.right;
-      if (p) (sum = sum.add(p.clone().multiplyScalar(v))), (weight += v);
-    }
-    if (!weight) return;
-    const center = sum.divideScalar(weight);
-    if (center.y < -0.12) this.flyTo(new THREE.Vector3(-3.1, -3.0, -1.0), new THREE.Vector3(0, -0.15, 0));
   }
 
   /** Move the camera without notifying listeners (used for syncing two brains). */
@@ -428,25 +393,9 @@ export class BrainScene {
     this.pinned = ids;
     this.paint();
   }
-  /** Fade everything except the selected part (0 = off, 1 = strongest). */
-  setIsolation(t: number) {
-    this.isolation = THREE.MathUtils.clamp(t, 0, 1);
-    this.applyVisibility();
-  }
-  /** Where the selected part is on screen (CSS pixels), for drawing its label line. */
-  selectedScreenPoint(): { x: number; y: number } | null {
-    if (!this.selected) return null;
-    const c = this.centerOf(this.selected);
-    if (!c) return null;
-    const p = c.clone().project(this.camera);
-    if (p.z > 1) return null;
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    return { x: ((p.x + 1) / 2) * rect.width, y: ((1 - p.y) / 2) * rect.height };
-  }
-  /** A PNG picture of the current view. */
-  snapshot(): string {
-    this.renderer.render(this.scene, this.camera);
-    return this.renderer.domElement.toDataURL("image/png");
+  setAppearance(a: Appearance) {
+    this.appearance = a;
+    this.paint();
   }
   setBoundaries(on: boolean) {
     this.showBoundaries = on;
@@ -501,11 +450,9 @@ export class BrainScene {
     if (this.cortex.lh) this.cortex.lh.mesh.visible = this.visible.left;
     if (this.cortex.rh) this.cortex.rh.mesh.visible = this.visible.right;
     // With deep structures on, the cortex turns see-through so they are visible inside.
-    // Isolation fades the unselected parts (per vertex, in paint()), so it also needs transparency.
-    const fading = this.isolation > 0.01 && Boolean(this.selected);
-    this.cortexMaterial.transparent = xray || fading;
+    this.cortexMaterial.transparent = xray;
     this.cortexMaterial.opacity = xray ? 0.22 : 1;
-    this.cortexMaterial.depthWrite = !xray && !(fading && this.isolation >= 0.35);
+    this.cortexMaterial.depthWrite = !xray;
     this.cortexMaterial.needsUpdate = true;
     for (const m of this.subMeshes) {
       const key = m.userData.meshKey as string;
@@ -557,59 +504,50 @@ export class BrainScene {
   }
 
   private paint() {
-    const pal = PAL;
+    const pal = PALETTES[this.appearance];
     const tmp = new THREE.Color();
     const ovColor = new THREE.Color();
     const atlasColors = new Map<string, THREE.Color>();
     const hoverKeys = this.hovered ? meshKeysOf(this.hovered) : [];
     const { byKey, byId } = this.highlightMaps();
-    const selectedKeys = new Set(this.selected ? meshKeysOf(this.selected) : []);
-    const iso = this.selected ? this.isolation : 0;
-    const fadedAlpha = 1 - iso * 0.94;
     for (const h of ["lh", "rh"] as const) {
       const c = this.cortex[h];
       if (!c) continue;
       const col = c.mesh.geometry.attributes.color as THREE.BufferAttribute;
       for (let i = 0; i < c.regionKeyOf.length; i++) {
         const key = c.regionKeyOf[i];
-        // Realistic shading: gyri (crowns) lighter, sulci (grooves) darker and pinker.
-        const depth = THREE.MathUtils.smoothstep(c.sulc[i], -0.5, 0.7);
-        tmp.copy(pal.gyrus).lerp(pal.sulcus, depth * 0.75);
-        tmp.lerp(pal.groove, c.groove[i] * 0.95);
-        tmp.lerp(pal.vessel, c.vessel[i] * 0.3);
-        tmp.multiplyScalar(1 + c.mottle[i] * 0.04);
+        // Realistic shading: gyri (crowns) lighter, sulci (grooves) darker.
+        const depth = THREE.MathUtils.smoothstep(c.sulc[i], -0.6, 0.6);
+        tmp.copy(pal.gyrus).lerp(pal.sulcus, depth * 0.85);
         const hl = key ? byKey.get(key) : undefined;
         const ov = key ? this.overlayCurrent.get(key) ?? 0 : 0;
-        if (hl) tmp.lerp(hl, 0.72).multiplyScalar(1 - depth * 0.25);
-        else if (ov > 0.01) tmp.lerp(rampColor(ov, ovColor), 0.45 + 0.5 * ov).multiplyScalar(1 - depth * 0.2);
+        if (hl) tmp.lerp(hl, 0.78).multiplyScalar(1 - depth * 0.25);
+        else if (ov > 0.01) tmp.lerp(rampColor(ov, ovColor), 0.3 + 0.6 * ov).multiplyScalar(1 - depth * 0.2);
         else if (this.colorAtlas && key) {
           let ac = atlasColors.get(key);
           if (!ac) {
-            ac = new THREE.Color().setHSL((hashKey(key) % 360) / 360, 0.5, 0.62);
+            ac = new THREE.Color().setHSL((hashKey(key) % 360) / 360, 0.45, 0.55);
             atlasColors.set(key, ac);
           }
-          tmp.lerp(ac, 0.6);
+          tmp.lerp(ac, 0.55);
         }
         if (key && hoverKeys.includes(key)) tmp.lerp(new THREE.Color("#ffffff"), HOVER_MIX);
-        if (this.showBoundaries && c.boundary[i]) tmp.lerp(pal.boundary, 0.42);
-        const alpha = key && selectedKeys.has(key) ? 1 : fadedAlpha;
-        col.setXYZW(i, tmp.r, tmp.g, tmp.b, alpha);
+        if (this.showBoundaries && c.boundary[i]) tmp.lerp(pal.boundary, 0.7);
+        col.setXYZ(i, tmp.r, tmp.g, tmp.b);
       }
       col.needsUpdate = true;
     }
     for (const m of this.subMeshes) {
       const key = m.userData.meshKey as string;
-      const mat = m.material as THREE.MeshPhysicalMaterial;
+      const mat = m.material as THREE.MeshStandardMaterial;
       const base = key === "cerebellum" ? pal.cerebellum : key === "brainstem" ? pal.stem : key === "corpus-callosum" ? pal.callosum : pal.deep;
       const hl = byKey.get(key) ?? byId.get(m.userData.regionId);
       const ov = this.overlayCurrent.get(key) ?? 0;
-      mat.color.copy(hl ? hl : ov > 0.01 ? base.clone().lerp(rampColor(ov, ovColor), 0.55 + 0.45 * ov) : base);
+      mat.color.copy(hl ? hl : ov > 0.01 ? base.clone().lerp(rampColor(ov, ovColor), 0.3 + 0.6 * ov) : base);
       if (hoverKeys.includes(key)) mat.color.lerp(new THREE.Color("#ffffff"), HOVER_MIX);
       mat.emissive.set(hl ? hl : "#000000").multiplyScalar(hl ? 0.25 : 0);
       const isDeep = key !== "cerebellum" && key !== "brainstem";
-      const isSelected = selectedKeys.has(key) || m.userData.regionId === this.selected;
-      mat.opacity = (isDeep && !hl ? 0.85 : 1) * (isSelected ? 1 : fadedAlpha);
-      mat.depthWrite = isSelected || iso < 0.35;
+      mat.opacity = isDeep && !hl ? 0.85 : 1;
     }
     for (const m of this.markers) {
       const id = m.userData.regionId as string;
@@ -641,7 +579,6 @@ export class BrainScene {
 
   private onDown = (e: PointerEvent) => {
     this.downAt = { x: e.clientX, y: e.clientY };
-    this.opts.onHover?.(null, 0, 0); // hide the name label while dragging
   };
   private onUp = (e: PointerEvent) => {
     if (!this.downAt) return;
@@ -680,7 +617,6 @@ export class BrainScene {
   private loop = () => {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.loop);
-    if (!this.container.clientWidth) return; // hidden (another tab is open): skip drawing
     if (this.camAnim) {
       const a = this.camAnim;
       a.t = Math.min(1, a.t + 0.04);
@@ -690,28 +626,10 @@ export class BrainScene {
       if (a.t >= 1) this.camAnim = null;
     }
     this.stepOverlay();
+    this.dust.rotation.y += 0.0006;
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   };
-}
-
-/** Smooth 3D value noise in -1..1 (for the tissue color variation). */
-function tissueNoise(x: number, y: number, z: number): number {
-  const hash = (i: number, j: number, k: number) => {
-    const n = Math.sin(i * 127.1 + j * 311.7 + k * 74.7) * 43758.5453;
-    return n - Math.floor(n);
-  };
-  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-  const fx = x - xi, fy = y - yi, fz = z - zi;
-  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-  const c = (dx: number, dy: number, dz: number) => hash(xi + dx, yi + dy, zi + dz);
-  const val = lerp(
-    lerp(lerp(c(0, 0, 0), c(1, 0, 0), u), lerp(c(0, 1, 0), c(1, 1, 0), u), v),
-    lerp(lerp(c(0, 0, 1), c(1, 0, 1), u), lerp(c(0, 1, 1), c(1, 1, 1), u), v),
-    w,
-  );
-  return val * 2 - 1;
 }
 
 function hashKey(s: string): number {

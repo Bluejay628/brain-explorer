@@ -18,25 +18,25 @@ export function CharacterAvatar({ age, size = 120 }: { age: number; size?: numbe
     <svg width={size} height={size * 1.1} viewBox="0 0 200 220" role="img" aria-label={`Illustration of the character, age ${age}`}>
       <defs>
         <radialGradient id={`${gid}-g`} cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="#f4a9b8" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#f4a9b8" stopOpacity="0" />
+          <stop offset="0%" stopColor="#3fd6ff" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#3fd6ff" stopOpacity="0" />
         </radialGradient>
       </defs>
       <circle cx="100" cy={cy} r={head + 26} fill={`url(#${gid}-g)`} />
       {/* shoulders */}
-      <path d={`M ${100 - shoulders} 220 C ${100 - shoulders} ${shoulderY + 18}, ${100 - shoulders * 0.55} ${shoulderY}, 88 ${shoulderY} L 112 ${shoulderY} C ${100 + shoulders * 0.55} ${shoulderY}, ${100 + shoulders} ${shoulderY + 18}, ${100 + shoulders} 220`} fill="#dfe7f5" stroke="#7a6f86" strokeWidth="1.6" />
+      <path d={`M ${100 - shoulders} 220 C ${100 - shoulders} ${shoulderY + 18}, ${100 - shoulders * 0.55} ${shoulderY}, 88 ${shoulderY} L 112 ${shoulderY} C ${100 + shoulders * 0.55} ${shoulderY}, ${100 + shoulders} ${shoulderY + 18}, ${100 + shoulders} 220`} fill="rgba(12,19,34,.9)" stroke="#5f7aa8" strokeWidth="1.6" />
       {/* collar */}
-      <path d={`M 88 ${shoulderY} L 100 ${shoulderY + 14} L 112 ${shoulderY}`} fill="none" stroke="#7a6f86" strokeWidth="1.4" />
+      <path d={`M 88 ${shoulderY} L 100 ${shoulderY + 14} L 112 ${shoulderY}`} fill="none" stroke="#5f7aa8" strokeWidth="1.4" />
       {/* neck */}
-      <path d={`M 91 ${neckTop - 4} L 91 ${shoulderY} M 109 ${neckTop - 4} L 109 ${shoulderY}`} stroke="#7a6f86" strokeWidth="1.6" />
+      <path d={`M 91 ${neckTop - 4} L 91 ${shoulderY} M 109 ${neckTop - 4} L 109 ${shoulderY}`} stroke="#8fa6cf" strokeWidth="1.6" />
       {/* head */}
-      <ellipse cx="100" cy={cy} rx={head * 0.86} ry={head * 1.12} fill="#fff7f4" stroke="#7a6f86" strokeWidth="1.8" />
+      <ellipse cx="100" cy={cy} rx={head * 0.86} ry={head * 1.12} fill="rgba(8,13,24,.95)" stroke="#8fa6cf" strokeWidth="1.8" />
       {/* ears */}
-      <path d={`M ${100 - head * 0.86} ${cy} q -7 4 0 14 M ${100 + head * 0.86} ${cy} q 7 4 0 14`} fill="none" stroke="#7a6f86" strokeWidth="1.6" />
+      <path d={`M ${100 - head * 0.86} ${cy} q -7 4 0 14 M ${100 + head * 0.86} ${cy} q 7 4 0 14`} fill="none" stroke="#8fa6cf" strokeWidth="1.6" />
       {/* hair */}
-      <path d={`M ${100 - head * 0.88} ${cy - 2} C ${100 - head} ${cy - head * 1.25}, ${100 + head * 0.7} ${cy - head * 1.45}, ${100 + head * 0.9} ${cy - 6} C ${100 + head * 0.5} ${cy - head * 0.75}, ${100 - head * 0.2} ${cy - head * 0.6}, ${100 - head * 0.88} ${cy - 2} Z`} fill={hairFill} stroke="#7a6f86" strokeWidth="1.4" />
+      <path d={`M ${100 - head * 0.88} ${cy - 2} C ${100 - head} ${cy - head * 1.25}, ${100 + head * 0.7} ${cy - head * 1.45}, ${100 + head * 0.9} ${cy - 6} C ${100 + head * 0.5} ${cy - head * 0.75}, ${100 - head * 0.2} ${cy - head * 0.6}, ${100 - head * 0.88} ${cy - 2} Z`} fill={hairFill} stroke="#8fa6cf" strokeWidth="1.4" />
       {/* brain glyph inside the head */}
-      <g transform={`translate(100 ${cy - head * 0.42}) scale(${(head / 34) * 0.62})`} fill="none" stroke="#c45a74" strokeWidth="1.6" strokeLinecap="round" opacity="0.95">
+      <g transform={`translate(100 ${cy - head * 0.42}) scale(${(head / 34) * 0.62})`} fill="none" stroke="#3fd6ff" strokeWidth="1.4" strokeLinecap="round" opacity="0.95">
         <path d="M0 -14 C -6 -18 -16 -16 -17 -8 C -23 -6 -23 4 -17 6 C -17 13 -8 16 0 12 C 8 16 17 13 17 6 C 23 4 23 -6 17 -8 C 16 -16 6 -18 0 -14 Z" />
         <path d="M0 -14 V 12 M -9 -6 C -5 -5 -5 0 -9 1 M 9 -6 C 5 -5 5 0 9 1" />
       </g>

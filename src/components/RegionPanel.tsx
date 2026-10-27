@@ -1,4 +1,4 @@
-import { useNav } from "../nav";
+import { Link } from "react-router-dom";
 import { REGION_BY_ID, childrenOf, type RegionKind } from "../../shared/regions";
 import { useStore } from "../store";
 import { personNoun } from "../../shared/lifeStage";
@@ -21,12 +21,11 @@ interface Props {
 
 export function RegionPanel({ regionId, onAsk, onSelect }: Props) {
   const { pinned, togglePinned, character } = useStore();
-  const { searchStudies } = useNav();
   const region = regionId ? REGION_BY_ID.get(regionId) : undefined;
   if (!region) {
     return (
       <div className="empty">
-        <p>Click a part of the brain, or pick one from the list at the top of the brain, to see what it does.</p>
+        <p>Click a region on the brain, or choose one from the list under it, to see what it does.</p>
       </div>
     );
   }
@@ -85,9 +84,9 @@ export function RegionPanel({ regionId, onAsk, onSelect }: Props) {
             {pinned.includes(region.id) ? "Remove from brain" : "+ Add to brain"}
           </button>
         )}
-        <button className="btn ghost" onClick={() => searchStudies(region.searchQuery)}>
+        <Link className="btn ghost" to={`/library?q=${encodeURIComponent(region.searchQuery)}`}>
           <IconSearch size={15} /> Find studies
-        </button>
+        </Link>
       </div>
       <p className="xs faint">
         The overview is a general educational summary written for Brain Explorer from standard neuroanatomy, not from a specific study.
