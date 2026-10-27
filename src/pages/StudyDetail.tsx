@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNav } from "../nav";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { BrainMapAvailability, Derived, ResearchRecord } from "../../shared/types";
 import { REGION_BY_ID } from "../../shared/regions";
 import { api } from "../api";
@@ -17,9 +17,9 @@ function Prov({ d }: { d?: Derived<unknown> }) {
   return <div className="prov" title={d.note}>{PROVENANCE_LABEL[d.provenance]}{d.note ? ` — ${d.note}` : ""}</div>;
 }
 
-/** One study, shown in a panel that slides over the page. */
-export function StudyDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { go } = useNav();
+export function StudyDetail() {
+  const { id = "" } = useParams();
+  const navigate = useNavigate();
   const { saved } = useStore();
   const [record, setRecord] = useState<ResearchRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function StudyDetail({ id, onClose }: { id: string; onClose: () => void }
   if (error) {
     return (
       <div className="stack">
-        <button className="btn ghost" onClick={onClose} style={{ alignSelf: "flex-start" }}><IconArrowLeft size={15} /> Back</button>
+        <button className="btn ghost" onClick={() => navigate(-1)} style={{ alignSelf: "flex-start" }}><IconArrowLeft size={15} /> Back</button>
         <div className="notice red"><IconX size={16} /><span>{error}</span></div>
       </div>
     );
@@ -81,7 +81,7 @@ export function StudyDetail({ id, onClose }: { id: string; onClose: () => void }
 
   return (
     <div className="fade-in">
-      <button className="btn ghost" onClick={onClose} style={{ marginBottom: 12 }}><IconArrowLeft size={15} /> Back</button>
+      <button className="btn ghost" onClick={() => navigate(-1)} style={{ marginBottom: 12 }}><IconArrowLeft size={15} /> Back</button>
       {offlineCopy && <div className="notice amber" style={{ marginBottom: 12 }}><span>The server couldn't be reached — showing the copy saved in this browser.</span></div>}
       <div className="detail">
         <article className="stack">
@@ -185,7 +185,7 @@ export function StudyDetail({ id, onClose }: { id: string; onClose: () => void }
               <dd className="xs">{r.peerReview?.value === "preprint" ? <span style={{ color: "var(--red)" }}>Preprint — not peer reviewed</span> : r.peerReview?.value === "peer-reviewed" ? "Published in a journal (peer reviewed)" : "Not reported"}<Prov d={r.peerReview} /></dd>
             </dl>
           </section>
-          <button onClick={() => go("ask", { q: r.title, study: null })} className="btn">Ask about this topic</button>
+          <Link to={`/explore?q=${encodeURIComponent(r.title)}`} className="btn">Ask about this topic</Link>
         </aside>
       </div>
     </div>
